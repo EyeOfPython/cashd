@@ -519,6 +519,13 @@ SECP256K1_API int secp256k1_ecdsa_signature_normalize(
     const secp256k1_ecdsa_signature *sigin
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(3);
 
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_pubkey_tweak_add_check(
+    const secp256k1_context* ctx,
+    const unsigned char *tweaked_pubkey33,
+    const secp256k1_pubkey *internal_pubkey,
+    const unsigned char *tweak32
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
+
 /** An implementation of RFC6979 (using HMAC-SHA256) as nonce generation function.
  * If a data pointer is passed, it is assumed to be a pointer to 32 bytes of
  * extra entropy.

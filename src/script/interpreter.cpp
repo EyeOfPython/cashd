@@ -213,6 +213,36 @@ static bool EvalChecksig(const valtype &vchSig, const valtype &vchPubKey,
     return true;
 }
 
+/**
+ * Helper for Taproot
+ *
+ * A return value of false means the script fails entirely. When true is
+ * returned, the fSuccess variable indicates whether the signature check itself
+ * succeeded.
+ */
+static bool EvalChecksigTaproot(const valtype &vchSig, const valtype &vchPubKey,
+                                uint32_t flags, SigVersion sigversion,
+                                const BaseSignatureChecker &checker,
+                                ScriptExecutionMetrics &metrics,
+                                ScriptError *serror,
+                                bool &fSuccess) {
+    if (!CheckTransactionSignatureEncoding(vchSig, flags, serror) ||
+        !CheckPubKeyEncoding(vchPubKey, flags, serror)) {
+        // serror is set
+        return false;
+    }
+
+    if (vchSig.size()) {
+        fSuccess = checker.CheckSigTaproot(vchSig, vchPubKey, sigversion);
+        metrics.nSigChecks += 1;
+
+        if (!fSuccess) {
+            return set_error(serror, ScriptError::SIG_NULLFAIL);
+        }
+    }
+    return true;
+}
+
 bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                 uint32_t flags, const BaseSignatureChecker &checker,
                 ScriptExecutionMetrics &metrics, ScriptError *serror) {
@@ -1582,6 +1612,9 @@ void PrecomputedTransactionData::Init(std::vector<CTxOut>&& spent_outputs) {
 }
 
 static const CHashWriter HASHER_TAPSIGHASH = TaggedHash("TapSighash");
+static const CHashWriter HASHER_TAPLEAF = TaggedHash("TapLeaf");
+static const CHashWriter HASHER_TAPBRANCH = TaggedHash("TapBranch");
+static const CHashWriter HASHER_TAPTWEAK = TaggedHash("TapTweak");
 
 template<typename T>
 bool SignatureHashTaproot(uint256& hash_out, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache)
@@ -1623,9 +1656,7 @@ bool SignatureHashTaproot(uint256& hash_out, const T& tx_to, uint32_t in_pos, ui
     }
 
     // Data about the input/prevout being spent
-    const auto& witstack = tx_to.vin[in_pos].scriptWitness.stack;
-    bool have_annex = witstack.size() > 1 && witstack.back().size() > 0 && witstack.back()[0] == ANNEX_TAG;
-    const uint8_t spend_type = (ext_flag << 1) + (have_annex ? 1 : 0); // The low bit indicates whether an annex is present.
+    const uint8_t spend_type = ext_flag << 1; // The low bit indicates whether an annex is present.
     ss << spend_type;
     if (input_type == SIGHASH_ANYONECANPAY) {
         ss << tx_to.vin[in_pos].prevout;
@@ -1633,9 +1664,6 @@ bool SignatureHashTaproot(uint256& hash_out, const T& tx_to, uint32_t in_pos, ui
         ss << tx_to.vin[in_pos].nSequence;
     } else {
         ss << in_pos;
-    }
-    if (have_annex) {
-        ss << (CHashWriter(SER_GETHASH, 0) << witstack.back()).GetSHA256();
     }
 
     // Data about the output (if only one).
@@ -1775,6 +1803,34 @@ bool GenericTransactionSignatureChecker<T>::CheckSig(
 }
 
 template <class T>
+bool GenericTransactionSignatureChecker<T>::CheckSigTaproot(
+    const std::vector<uint8_t> &vchSigIn, const std::vector<uint8_t> &vchPubKey,
+    SigVersion sigversion) const {
+    CPubKey pubkey(vchPubKey);
+    if (!pubkey.IsValid()) {
+        return false;
+    }
+
+    // Hash type is one byte tacked on to the end of the signature
+    std::vector<uint8_t> vchSig(vchSigIn);
+    if (vchSig.empty()) {
+        return false;
+    }
+    SigHashType sigHashType = GetHashType(vchSig);
+    vchSig.pop_back();
+
+    uint256 sighash;
+    SignatureHashTaproot(sighash, *txTo, nIn, uint8_t(sigHashType.getRawSigHashType()),
+                         sigversion, *this->txdata);
+
+    if (!VerifySignature(vchSig, pubkey, sighash)) {
+        return false;
+    }
+
+    return true;
+}
+
+template <class T>
 bool GenericTransactionSignatureChecker<T>::CheckLockTime(
     const CScriptNum &nLockTime) const {
     // There are two kinds of nLockTime: lock-by-blockheight and
@@ -1868,6 +1924,29 @@ bool GenericTransactionSignatureChecker<T>::CheckSequence(
 template class GenericTransactionSignatureChecker<CTransaction>;
 template class GenericTransactionSignatureChecker<CMutableTransaction>;
 
+static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script)
+{
+    const int path_len = (control.size() - TAPROOT_CONTROL_BASE_SIZE) / TAPROOT_CONTROL_NODE_SIZE;
+    const CPubKey p{control.begin() + 1, control.begin() + TAPROOT_CONTROL_BASE_SIZE};
+    const CPubKey q{program};
+    uint256 tapleaf_hash = (CHashWriter(HASHER_TAPLEAF) << uint8_t(control[0] & TAPROOT_LEAF_MASK) << script).GetSHA256();
+    uint256 k = tapleaf_hash;
+    for (int i = 0; i < path_len; ++i) {
+        CHashWriter ss_branch{HASHER_TAPBRANCH};
+        Span<const unsigned char> node(control.data() + TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE);
+        if (std::lexicographical_compare(k.begin(), k.end(), node.begin(), node.end())) {
+            ss_branch << k << node;
+        } else {
+            ss_branch << node << k;
+        }
+        k = ss_branch.GetSHA256();
+    }
+    k = (CHashWriter(HASHER_TAPTWEAK) << MakeSpan(p) << k).GetSHA256();
+    if (control[0] != 0)
+        return false;
+    return q.CheckPayToContract(p, k);
+}
+
 bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey,
                   uint32_t flags, const BaseSignatureChecker &checker,
                   ScriptExecutionMetrics &metricsOut, ScriptError *serror) {
@@ -1886,6 +1965,52 @@ bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey,
         // serror is set
         return false;
     }
+
+    if (scriptPubKey.IsPayToTaproot()) {
+        if (stack.size() == 0) return set_error(serror, ScriptError::INVALID_STACK_OPERATION);
+        if (stack.size() >= 2 && !stack.back().empty() && stack.back()[0] == ANNEX_TAG) {
+            // Unlike Core, we can hardfork future annex meaning.
+            // Therefore, reject all spends containing an annex.
+            return set_error(serror, ScriptError::TAPROOT_DISABLED_ANNEX);
+        }
+
+        valtype taproot_state, taproot_program;
+        if (scriptPubKey.size() == 1 + 1 + 33 + 1) {
+            // Taproot with empty state
+            taproot_program = valtype(scriptPubKey.begin() + 2, scriptPubKey.begin() + 35);
+        } else if (scriptPubKey.size() == 1 + 32 + 1 + 33 + 1) {
+            // Taproot with 32 byte state
+            taproot_state = valtype(scriptPubKey.begin() + 1, scriptPubKey.begin() + 33);
+            taproot_program = valtype(scriptPubKey.begin() + 34, scriptPubKey.begin() + 77);
+        }
+
+        if (stack.size() == 1) {
+            // Key path spending (stack size is 1)
+            bool fSuccess;
+            if (!EvalChecksigTaproot(stack.front(), taproot_program, flags, SigVersion::TAPROOT, checker, metrics, serror, fSuccess)) {
+                return false; // serror is set
+            }
+            if (!fSuccess) {
+                return set_error(serror, ScriptError::TAPROOT_INVALID_SIG);
+            }
+            return set_success(serror);
+        } else {
+            // Script path spending (stack size is >1)
+            const valtype control = stack.back();
+            stack.pop_back();
+            const valtype script_bytes = stack.back();
+            stack.pop_back();
+            CScript exec_script = CScript(script_bytes.begin(), script_bytes.end());
+            if (control.size() < TAPROOT_CONTROL_BASE_SIZE || control.size() > TAPROOT_CONTROL_MAX_SIZE || ((control.size() - TAPROOT_CONTROL_BASE_SIZE) % TAPROOT_CONTROL_NODE_SIZE) != 0) {
+                return set_error(serror, ScriptError::TAPROOT_WRONG_CONTROL_SIZE);
+            }
+            if (!VerifyTaprootCommitment(control, taproot_program, exec_script)) {
+                return set_error(serror, ScriptError::TAPROOT_PROGRAM_MISMATCH);
+            }
+            return set_success(serror);
+        }
+    }
+
     stackCopy = stack;
     if (!EvalScript(stack, scriptPubKey, flags, checker, metrics, serror)) {
         // serror is set

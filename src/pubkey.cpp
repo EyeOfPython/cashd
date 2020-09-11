@@ -197,6 +197,23 @@ bool CPubKey::VerifyECDSA(const uint256 &hash,
                                   &pubkey);
 }
 
+bool CPubKey::CheckPayToContract(const CPubKey& base, const uint256& hash) const
+{
+    secp256k1_pubkey base_point;
+    secp256k1_pubkey tweaked_point;
+    size_t pk_len;
+    uint8_t pk_expected33[33];
+    if (!secp256k1_ec_pubkey_parse(secp256k1_context_verify, &base_point, base.data(), base.size()))
+        return false;
+    if (!secp256k1_ec_pubkey_tweak_add(secp256k1_context_verify, &tweaked_point, hash.begin()))
+        return false;
+    if (!secp256k1_ec_pubkey_serialize(secp256k1_context_verify,
+        pk_expected33, &pk_len, &tweaked_point, SECP256K1_EC_COMPRESSED))
+        return false;
+
+    return std::memcmp(vch, pk_expected33, COMPRESSED_SIZE) == 0;
+}
+
 bool CPubKey::VerifySchnorr(
     const uint256 &hash, const std::array<uint8_t, SCHNORR_SIZE> &sig) const {
     if (!IsValid()) {

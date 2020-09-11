@@ -28,6 +28,15 @@ enum class SigVersion
     TAPSCRIPT = 3,   //!< Taproot with 32-byte program, not BIP16 P2SH-wrapped, script path spending, leaf version 0xc0; see BIP 342
 };
 
+/** Signature hash sizes */
+static constexpr size_t TAPROOT_KEY_SIZE = 33;
+
+static constexpr uint8_t TAPROOT_LEAF_MASK = 0xfe;
+static constexpr size_t TAPROOT_CONTROL_BASE_SIZE = 33;
+static constexpr size_t TAPROOT_CONTROL_NODE_SIZE = 32;
+static constexpr size_t TAPROOT_CONTROL_MAX_NODE_COUNT = 128;
+static constexpr size_t TAPROOT_CONTROL_MAX_SIZE = TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * TAPROOT_CONTROL_MAX_NODE_COUNT;
+
 template <class T>
 uint256 SignatureHash(const CScript &scriptCode, const T &txTo,
                       unsigned int nIn, SigHashType sigHashType,
@@ -52,6 +61,12 @@ public:
     }
 
     virtual bool CheckSequence(const CScriptNum &nSequence) const {
+        return false;
+    }
+
+    virtual bool CheckSigTaproot(const std::vector<uint8_t> &vchSigIn,
+                                 const std::vector<uint8_t> &vchPubKey,
+                                 SigVersion sigversion) const {
         return false;
     }
 
@@ -80,6 +95,9 @@ public:
                   const std::vector<uint8_t> &vchPubKey,
                   const CScript &scriptCode,
                   uint32_t flags) const final override;
+    bool CheckSigTaproot(const std::vector<uint8_t> &vchSigIn,
+                         const std::vector<uint8_t> &vchPubKey,
+                         SigVersion sigversion) const override;
     bool CheckLockTime(const CScriptNum &nLockTime) const final override;
     bool CheckSequence(const CScriptNum &nSequence) const final override;
 };

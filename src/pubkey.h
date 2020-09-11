@@ -171,6 +171,8 @@ public:
     bool VerifySchnorr(const uint256 &hash,
                        const std::vector<uint8_t> &vchSig) const;
 
+    bool CheckPayToContract(const CPubKey& base, const uint256& hash) const;
+
     /**
      * Check whether a DER-serialized ECDSA signature is normalized (lower-S).
      */

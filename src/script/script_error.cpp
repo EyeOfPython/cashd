@@ -108,6 +108,14 @@ std::string ScriptErrorString(const ScriptError serror) {
             return "OP_NUM2BIN size limit exceeded";
         case ScriptError::SIGCHECKS_LIMIT_EXCEEDED:
             return "Validation resources exceeded (SigChecks)";
+        case ScriptError::TAPROOT_WRONG_CONTROL_SIZE:
+            return "Invalid Taproot control block size";
+        case ScriptError::TAPROOT_PROGRAM_MISMATCH:
+            return "Taproot program pubkey mismatch";
+        case ScriptError::TAPROOT_DISABLED_ANNEX:
+            return "Taproot annex disabled";
+        case ScriptError::TAPROOT_INVALID_SIG:
+            return "Taproot key spend failed";
         case ScriptError::UNKNOWN:
         case ScriptError::ERROR_COUNT:
         default:

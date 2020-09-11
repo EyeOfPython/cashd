@@ -680,6 +680,28 @@ int secp256k1_ec_pubkey_tweak_add(const secp256k1_context* ctx, secp256k1_pubkey
     return ret;
 }
 
+int secp256k1_pubkey_tweak_add_check(const secp256k1_context* ctx, const unsigned char *tweaked_pubkey33, const secp256k1_pubkey *internal_pubkey, const unsigned char *tweak32) {
+    secp256k1_ge p;
+    secp256k1_pubkey pubkey;
+    size_t pk_len;
+    uint8_t pk_expected33[32];
+
+    VERIFY_CHECK(ctx != NULL);
+    ARG_CHECK(secp256k1_ecmult_context_is_built(&ctx->ecmult_ctx));
+    ARG_CHECK(internal_pubkey != NULL);
+    ARG_CHECK(tweaked_pubkey33 != NULL);
+    ARG_CHECK(tweak32 != NULL);
+
+    if (!secp256k1_pubkey_load(ctx, &p, internal_pubkey)
+        || !secp256k1_ec_pubkey_tweak_add_helper(&ctx->ecmult_ctx, &p, tweak32)) {
+        return 0;
+    }
+    secp256k1_pubkey_save(&pubkey, &p);
+    secp256k1_ec_pubkey_serialize(ctx, pk_expected33, &pk_len, &pubkey, SECP256K1_EC_COMPRESSED);
+
+    return secp256k1_memcmp_var(&pk_expected33, tweaked_pubkey33, 33) == 0;
+}
+
 int secp256k1_ec_seckey_tweak_mul(const secp256k1_context* ctx, unsigned char *seckey, const unsigned char *tweak) {
     secp256k1_scalar factor;
     secp256k1_scalar sec;

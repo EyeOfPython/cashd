@@ -82,6 +82,11 @@ enum class ScriptError {
     /* OP_NUM2BIN size limit exceeded */
     INVALID_NUM2BIN_SIZE,
 
+    TAPROOT_WRONG_CONTROL_SIZE,
+    TAPROOT_PROGRAM_MISMATCH,
+    TAPROOT_DISABLED_ANNEX,
+    TAPROOT_INVALID_SIG,
+
     /* Auxiliary errors (unused by interpreter) */
     SIGCHECKS_LIMIT_EXCEEDED,
 
