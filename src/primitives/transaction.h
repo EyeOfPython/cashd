@@ -327,9 +327,25 @@ static inline CTransactionRef MakeTransactionRef(Tx &&txIn) {
 
 /** Precompute sighash midstate to avoid quadratic hashing */
 struct PrecomputedTransactionData {
+    // BIP341 precomputed data.
+    // These are single-SHA256, see
+    // https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#cite_note-15.
+    uint256 m_prevouts_single_hash;
+    uint256 m_sequences_single_hash;
+    uint256 m_outputs_single_hash;
+    uint256 m_spent_amounts_single_hash;
+    uint256 m_spent_scripts_single_hash;
+    //! Whether the 5 fields above are initialized.
+    bool m_bip341_taproot_ready = false;
+
+    // BIP143 precomputed data (double-SHA256).
     uint256 hashPrevouts, hashSequence, hashOutputs;
-    bool m_ready = false;
+    //! Whether the 3 fields above are initialized.
+    bool m_bip143_fields_ready = false;
+
     std::vector<CTxOut> m_spent_outputs;
+    //! Whether m_spent_outputs is initialized.
+    bool m_spent_outputs_ready = false;
 
     PrecomputedTransactionData()
         : hashPrevouts(), hashSequence(), hashOutputs() {}

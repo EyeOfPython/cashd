@@ -21,6 +21,13 @@ class CScript;
 class CTransaction;
 class uint256;
 
+enum class SigVersion
+{
+    BASE = 0,        //!< Bare scripts and BIP16 P2SH-wrapped redeemscripts
+    TAPROOT = 2,     //!< Taproot with 32-byte program, not BIP16 P2SH-wrapped, key path spending; see BIP 341
+    TAPSCRIPT = 3,   //!< Taproot with 32-byte program, not BIP16 P2SH-wrapped, script path spending, leaf version 0xc0; see BIP 342
+};
+
 template <class T>
 uint256 SignatureHash(const CScript &scriptCode, const T &txTo,
                       unsigned int nIn, SigHashType sigHashType,

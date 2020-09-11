@@ -17,6 +17,10 @@ enum {
     SIGHASH_SINGLE = 3,
     SIGHASH_FORKID = 0x40,
     SIGHASH_ANYONECANPAY = 0x80,
+
+    SIGHASH_DEFAULT = 0, //!< Taproot only; implied when sighash byte is missing, and equivalent to SIGHASH_ALL
+    SIGHASH_OUTPUT_MASK = 3,
+    SIGHASH_INPUT_MASK = 0x80,
 };
 
 /**

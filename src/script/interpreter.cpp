@@ -82,7 +82,7 @@ static void CleanupScriptCode(CScript &scriptCode,
 static bool IsOpcodeDisabled(opcodetype opcode, uint32_t flags) {
     switch (opcode) {
         case OP_RESERVED:
-        case OP_VER:
+        case OP_TAPROOT:
         case OP_VERIF:
         case OP_VERNOTIF:
         case OP_IFDUP:
@@ -1516,13 +1516,41 @@ template <class T> uint256 GetOutputsSHA256(const T &txTo) {
     return ss.GetSHA256();
 }
 
+/** Compute the (single) SHA256 of the concatenation of all amounts spent by a tx. */
+uint256 GetSpentAmountsSHA256(const std::vector<CTxOut>& outputs_spent)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+    for (const auto& txout : outputs_spent) {
+        ss << txout.nValue;
+    }
+    return ss.GetSHA256();
+}
+
+/** Compute the (single) SHA256 of the concatenation of all scriptPubKeys spent by a tx. */
+uint256 GetSpentScriptsSHA256(const std::vector<CTxOut>& outputs_spent)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+    for (const auto& txout : outputs_spent) {
+        ss << txout.scriptPubKey;
+    }
+    return ss.GetSHA256();
+}
+
+
 } // namespace
 
 template <class T>
 PrecomputedTransactionData::PrecomputedTransactionData(const T &txTo) {
-    hashPrevouts = SHA256Uint256(GetPrevoutsSHA256(txTo));
-    hashSequence = SHA256Uint256(GetSequencesSHA256(txTo));
-    hashOutputs = SHA256Uint256(GetOutputsSHA256(txTo));
+    // Computations shared between both sighash schemes.
+    m_prevouts_single_hash = GetPrevoutsSHA256(txTo);
+    m_sequences_single_hash = GetSequencesSHA256(txTo);
+    m_outputs_single_hash = GetOutputsSHA256(txTo);
+    m_bip143_fields_ready = true;
+
+    hashPrevouts = SHA256Uint256(m_prevouts_single_hash);
+    hashSequence = SHA256Uint256(m_sequences_single_hash);
+    hashOutputs = SHA256Uint256(m_outputs_single_hash);
+    m_bip143_fields_ready = true;
 }
 
 // explicit instantiation
@@ -1532,9 +1560,94 @@ template PrecomputedTransactionData::PrecomputedTransactionData(
     const CMutableTransaction &txTo);
 
 void PrecomputedTransactionData::Init(std::vector<CTxOut>&& spent_outputs) {
-    assert(!m_ready);
+    assert(!m_spent_outputs_ready);
+
     m_spent_outputs = std::move(spent_outputs);
-    m_ready = true;
+    if (!m_spent_outputs.empty()) {
+        m_spent_outputs_ready = true;
+    }
+
+    bool uses_bip341_taproot = false;
+    for (size_t inpos = 0; inpos < m_spent_outputs.size(); ++inpos) {
+        if (m_spent_outputs_ready && m_spent_outputs[inpos].scriptPubKey.IsPayToTaproot()) {
+            uses_bip341_taproot = true;
+            break;
+        }
+    }
+    if (uses_bip341_taproot) {
+        m_spent_amounts_single_hash = GetSpentAmountsSHA256(m_spent_outputs);
+        m_spent_scripts_single_hash = GetSpentScriptsSHA256(m_spent_outputs);
+        m_bip341_taproot_ready = true;
+    }
+}
+
+static const CHashWriter HASHER_TAPSIGHASH = TaggedHash("TapSighash");
+
+template<typename T>
+bool SignatureHashTaproot(uint256& hash_out, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache)
+{
+    uint8_t ext_flag;
+    switch (sigversion) {
+    case SigVersion::TAPROOT:
+        ext_flag = 0;
+        break;
+    default:
+        assert(false);
+    }
+    assert(in_pos < tx_to.vin.size());
+    assert(cache.m_bip341_taproot_ready && cache.m_spent_outputs_ready);
+
+    CHashWriter ss = HASHER_TAPSIGHASH;
+
+    // Epoch
+    static constexpr uint8_t EPOCH = 0;
+    ss << EPOCH;
+
+    // Hash type
+    const uint8_t output_type = (hash_type == SIGHASH_DEFAULT) ? SIGHASH_ALL : (hash_type & SIGHASH_OUTPUT_MASK); // Default (no sighash byte) is equivalent to SIGHASH_ALL
+    const uint8_t input_type = hash_type & SIGHASH_INPUT_MASK;
+    if (!(hash_type <= 0x03 || (hash_type >= 0x81 && hash_type <= 0x83))) return false;
+    ss << hash_type;
+
+    // Transaction level data
+    ss << tx_to.nVersion;
+    ss << tx_to.nLockTime;
+    if (input_type != SIGHASH_ANYONECANPAY) {
+        ss << cache.m_prevouts_single_hash;
+        ss << cache.m_spent_amounts_single_hash;
+        ss << cache.m_spent_scripts_single_hash;
+        ss << cache.m_sequences_single_hash;
+    }
+    if (output_type == SIGHASH_ALL) {
+        ss << cache.m_outputs_single_hash;
+    }
+
+    // Data about the input/prevout being spent
+    const auto& witstack = tx_to.vin[in_pos].scriptWitness.stack;
+    bool have_annex = witstack.size() > 1 && witstack.back().size() > 0 && witstack.back()[0] == ANNEX_TAG;
+    const uint8_t spend_type = (ext_flag << 1) + (have_annex ? 1 : 0); // The low bit indicates whether an annex is present.
+    ss << spend_type;
+    if (input_type == SIGHASH_ANYONECANPAY) {
+        ss << tx_to.vin[in_pos].prevout;
+        ss << cache.m_spent_outputs[in_pos];
+        ss << tx_to.vin[in_pos].nSequence;
+    } else {
+        ss << in_pos;
+    }
+    if (have_annex) {
+        ss << (CHashWriter(SER_GETHASH, 0) << witstack.back()).GetSHA256();
+    }
+
+    // Data about the output (if only one).
+    if (output_type == SIGHASH_SINGLE) {
+        if (in_pos >= tx_to.vout.size()) return false;
+        CHashWriter sha_single_output(SER_GETHASH, 0);
+        sha_single_output << tx_to.vout[in_pos];
+        ss << sha_single_output.GetSHA256();
+    }
+
+    hash_out = ss.GetSHA256();
+    return true;
 }
 
 template <class T>

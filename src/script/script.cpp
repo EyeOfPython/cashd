@@ -62,8 +62,8 @@ std::string GetOpName(opcodetype opcode) {
         // control
         case OP_NOP:
             return "OP_NOP";
-        case OP_VER:
-            return "OP_VER";
+        case OP_TAPROOT:
+            return "OP_TAPROOT";
         case OP_IF:
             return "OP_IF";
         case OP_NOTIF:
@@ -374,6 +374,11 @@ bool CScript::IsPayToScriptHash() const {
     // Extra-fast test for pay-to-script-hash CScripts:
     return (this->size() == 23 && (*this)[0] == OP_HASH160 &&
             (*this)[1] == 0x14 && (*this)[22] == OP_EQUAL);
+}
+
+bool CScript::IsPayToTaproot() const {
+    // Extra-fast test for pay-to-taproot CScripts:
+    return (*this)[this->size() - 1] == OP_TAPROOT;
 }
 
 bool CScript::IsCommitment(const std::vector<uint8_t> &data) const {

@@ -41,6 +41,11 @@ static const int MAX_NUM2BIN_SIZE = 68;
 // otherwise as UNIX timestamp. Thresold is Tue Nov 5 00:53:20 1985 UTC
 static const unsigned int LOCKTIME_THRESHOLD = 500000000;
 
+// Tag for input annex. If there are at least two witness elements for a transaction input,
+// and the first byte of the last element is 0x50, this last element is called annex, and
+// has meanings independent of the script
+static constexpr unsigned int ANNEX_TAG = 0x50;
+
 template <typename T> std::vector<uint8_t> ToByteVector(const T &in) {
     return std::vector<uint8_t>(in.begin(), in.end());
 }
@@ -75,7 +80,7 @@ enum opcodetype {
 
     // control
     OP_NOP = 0x61,
-    OP_VER = 0x62,
+    OP_TAPROOT = 0x62,
     OP_IF = 0x63,
     OP_NOTIF = 0x64,
     OP_VERIF = 0x65,
@@ -529,6 +534,7 @@ public:
     }
 
     bool IsPayToScriptHash() const;
+    bool IsPayToTaproot() const;
     bool IsCommitment(const std::vector<uint8_t> &data) const;
     bool IsWitnessProgram(int &version, std::vector<uint8_t> &program) const;
     bool IsWitnessProgram() const;
