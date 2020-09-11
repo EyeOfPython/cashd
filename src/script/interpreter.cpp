@@ -245,6 +245,7 @@ static bool EvalChecksigTaproot(const valtype &vchSig, const valtype &vchPubKey,
 
 bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                 uint32_t flags, const BaseSignatureChecker &checker,
+                SigVersion sigversion, ScriptExecutionData& execdata,
                 ScriptExecutionMetrics &metrics, ScriptError *serror) {
     static const CScriptNum bnZero(0);
     static const CScriptNum bnOne(1);
@@ -1820,6 +1821,7 @@ bool GenericTransactionSignatureChecker<T>::CheckSigTaproot(
     vchSig.pop_back();
 
     uint256 sighash;
+    assert(this->txdata);
     SignatureHashTaproot(sighash, *txTo, nIn, uint8_t(sigHashType.getRawSigHashType()),
                          sigversion, *this->txdata);
 

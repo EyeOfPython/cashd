@@ -28,6 +28,8 @@ enum class SigVersion
     TAPSCRIPT = 3,   //!< Taproot with 32-byte program, not BIP16 P2SH-wrapped, script path spending, leaf version 0xc0; see BIP 342
 };
 
+struct ScriptExecutionData {};
+
 /** Signature hash sizes */
 static constexpr size_t TAPROOT_KEY_SIZE = 33;
 
@@ -109,7 +111,15 @@ using MutableTransactionSignatureChecker =
 
 bool EvalScript(std::vector<std::vector<uint8_t>> &stack, const CScript &script,
                 uint32_t flags, const BaseSignatureChecker &checker,
+                SigVersion sigversion, ScriptExecutionData& execdata,
                 ScriptExecutionMetrics &metrics, ScriptError *error = nullptr);
+static inline bool EvalScript(std::vector<std::vector<uint8_t>> &stack,
+                              const CScript &script,
+                              uint32_t flags, const BaseSignatureChecker &checker,
+                              ScriptExecutionMetrics &metrics, ScriptError *serror = nullptr) {
+    ScriptExecutionData execdata;
+    return EvalScript(stack, script, flags, checker, SigVersion::BASE, execdata, metrics, serror);
+}
 static inline bool EvalScript(std::vector<std::vector<uint8_t>> &stack,
                               const CScript &script, uint32_t flags,
                               const BaseSignatureChecker &checker,
