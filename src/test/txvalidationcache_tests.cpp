@@ -104,7 +104,7 @@ static inline bool
 CheckInputScripts(const CTransaction &tx, TxValidationState &state,
                   const CCoinsViewCache &view, const uint32_t flags,
                   bool sigCacheStore, bool scriptCacheStore,
-                  const PrecomputedTransactionData &txdata, int &nSigChecksOut,
+                  PrecomputedTransactionData &txdata, int &nSigChecksOut,
                   std::vector<CScriptCheck> *pvChecks,
                   CheckInputsLimiter *pBlockLimitSigChecks = nullptr)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {

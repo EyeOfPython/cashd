@@ -1531,6 +1531,12 @@ template PrecomputedTransactionData::PrecomputedTransactionData(
 template PrecomputedTransactionData::PrecomputedTransactionData(
     const CMutableTransaction &txTo);
 
+void PrecomputedTransactionData::Init(std::vector<CTxOut>&& spent_outputs) {
+    assert(!m_ready);
+    m_spent_outputs = std::move(spent_outputs);
+    m_ready = true;
+}
+
 template <class T>
 uint256 SignatureHash(const CScript &scriptCode, const T &txTo,
                       unsigned int nIn, SigHashType sigHashType,

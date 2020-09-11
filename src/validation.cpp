@@ -1142,7 +1142,7 @@ int GetSpendHeight(const CCoinsViewCache &inputs) {
 bool CheckInputScripts(const CTransaction &tx, TxValidationState &state,
                        const CCoinsViewCache &inputs, const uint32_t flags,
                        bool sigCacheStore, bool scriptCacheStore,
-                       const PrecomputedTransactionData &txdata,
+                       PrecomputedTransactionData &txdata,
                        int &nSigChecksOut, TxSigCheckLimiter &txLimitSigChecks,
                        CheckInputsLimiter *pBlockLimitSigChecks,
                        std::vector<CScriptCheck> *pvChecks) {
@@ -1170,10 +1170,21 @@ bool CheckInputScripts(const CTransaction &tx, TxValidationState &state,
 
     int nSigChecksTotal = 0;
 
-    for (size_t i = 0; i < tx.vin.size(); i++) {
-        const COutPoint &prevout = tx.vin[i].prevout;
-        const Coin &coin = inputs.AccessCoin(prevout);
-        assert(!coin.IsSpent());
+    if (!txdata.m_ready) {
+        std::vector<CTxOut> spent_outputs;
+        spent_outputs.reserve(tx.vin.size());
+
+        for (const auto& txin : tx.vin) {
+            const COutPoint& prevout = txin.prevout;
+            const Coin& coin = inputs.AccessCoin(prevout);
+            assert(!coin.IsSpent());
+            spent_outputs.emplace_back(coin.GetTxOut());
+        }
+        txdata.Init(std::move(spent_outputs));
+    }
+    assert(txdata.m_spent_outputs.size() == tx.vin.size());
+
+    for (unsigned int i = 0; i < tx.vin.size(); i++) {
 
         // We very carefully only pass in things to CScriptCheck which are
         // clearly committed to by tx's hash. This provides a sanity
@@ -1182,8 +1193,9 @@ bool CheckInputScripts(const CTransaction &tx, TxValidationState &state,
         // of CScriptCheck.
 
         // Verify signature
-        CScriptCheck check(coin.GetTxOut(), tx, i, flags, sigCacheStore, txdata,
-                           &txLimitSigChecks, pBlockLimitSigChecks);
+        CScriptCheck check(txdata.m_spent_outputs[i], tx, i, flags,
+                           sigCacheStore, txdata, &txLimitSigChecks,
+                           pBlockLimitSigChecks);
 
         // If pvChecks is not null, defer the check execution to the caller.
         if (pvChecks) {
@@ -1205,8 +1217,8 @@ bool CheckInputScripts(const CTransaction &tx, TxValidationState &state,
                 // NOT_STANDARD instead of CONSENSUS to avoid downstream users
                 // splitting the network between upgraded and non-upgraded nodes
                 // by banning CONSENSUS-failing data providers.
-                CScriptCheck check2(coin.GetTxOut(), tx, i, mandatoryFlags,
-                                    sigCacheStore, txdata);
+                CScriptCheck check2(txdata.m_spent_outputs[i], tx, i,
+                                    mandatoryFlags, sigCacheStore, txdata);
                 if (check2()) {
                     return state.Invalid(
                         TxValidationResult::TX_NOT_STANDARD,
@@ -1788,10 +1800,11 @@ bool CChainState::ConnectBlock(const CBlock &block, BlockValidationState &state,
         // deferred into vChecks).
         int nSigChecksRet;
         TxValidationState tx_state;
+        PrecomputedTransactionData txdata(tx);
         if (fScriptChecks &&
             !CheckInputScripts(tx, tx_state, view, flags, fCacheResults,
-                               fCacheResults, PrecomputedTransactionData(tx),
-                               nSigChecksRet, nSigChecksTxLimiters[txIndex],
+                               fCacheResults, txdata, nSigChecksRet,
+                               nSigChecksTxLimiters[txIndex],
                                &nSigChecksBlockLimiter, &vChecks)) {
             // Any transaction validation failure in ConnectBlock is a block
             // consensus failure

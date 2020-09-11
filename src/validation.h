@@ -353,7 +353,7 @@ class ConnectTrace;
 bool CheckInputScripts(const CTransaction &tx, TxValidationState &state,
                        const CCoinsViewCache &view, const uint32_t flags,
                        bool sigCacheStore, bool scriptCacheStore,
-                       const PrecomputedTransactionData &txdata,
+                       PrecomputedTransactionData &txdata,
                        int &nSigChecksOut, TxSigCheckLimiter &txLimitSigChecks,
                        CheckInputsLimiter *pBlockLimitSigChecks,
                        std::vector<CScriptCheck> *pvChecks)
@@ -366,7 +366,7 @@ static inline bool
 CheckInputScripts(const CTransaction &tx, TxValidationState &state,
                   const CCoinsViewCache &view, const uint32_t flags,
                   bool sigCacheStore, bool scriptCacheStore,
-                  const PrecomputedTransactionData &txdata, int &nSigChecksOut)
+                  PrecomputedTransactionData &txdata, int &nSigChecksOut)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     TxSigCheckLimiter nSigChecksTxLimiter;
     return CheckInputScripts(tx, state, view, flags, sigCacheStore,
