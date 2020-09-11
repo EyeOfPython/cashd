@@ -28,12 +28,24 @@ enum class SigVersion
     TAPSCRIPT = 3,   //!< Taproot with 32-byte program, not BIP16 P2SH-wrapped, script path spending, leaf version 0xc0; see BIP 342
 };
 
-struct ScriptExecutionData {};
+struct ScriptExecutionData {
+
+    //! Whether m_tapleaf_hash is initialized.
+    bool m_tapleaf_hash_init = false;
+    //! The tapleaf hash.
+    uint256 m_tapleaf_hash;
+
+    //! Whether m_codeseparator_pos is initialized.
+    bool m_codeseparator_pos_init = false;
+    //! Opcode position of the last executed OP_CODESEPARATOR (or 0xFFFFFFFF if none executed).
+    uint32_t m_codeseparator_pos;
+};
 
 /** Signature hash sizes */
 static constexpr size_t TAPROOT_KEY_SIZE = 33;
 
 static constexpr uint8_t TAPROOT_LEAF_MASK = 0xfe;
+static constexpr uint8_t TAPROOT_LEAF_TAPSCRIPT = 0xc0;
 static constexpr size_t TAPROOT_CONTROL_BASE_SIZE = 33;
 static constexpr size_t TAPROOT_CONTROL_NODE_SIZE = 32;
 static constexpr size_t TAPROOT_CONTROL_MAX_NODE_COUNT = 128;

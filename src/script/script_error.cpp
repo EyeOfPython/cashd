@@ -96,6 +96,14 @@ std::string ScriptErrorString(const ScriptError serror) {
             return "Only Schnorr signatures allowed in this operation";
         case ScriptError::DISCOURAGE_UPGRADABLE_NOPS:
             return "NOPx reserved for soft-fork upgrades";
+        case ScriptError::DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM:
+            return "Witness version reserved for soft-fork upgrades";
+        case ScriptError::DISCOURAGE_UPGRADABLE_TAPROOT_VERSION:
+            return "Taproot version reserved for soft-fork upgrades";
+        case ScriptError::DISCOURAGE_OP_SUCCESS:
+            return "OP_SUCCESSx reserved for soft-fork upgrades";
+        case ScriptError::DISCOURAGE_UPGRADABLE_PUBKEYTYPE:
+            return "Public key version reserved for soft-fork upgrades";
         case ScriptError::PUBKEYTYPE:
             return "Public key is neither compressed or uncompressed";
         case ScriptError::CLEANSTACK:
@@ -116,6 +124,10 @@ std::string ScriptErrorString(const ScriptError serror) {
             return "Taproot annex disabled";
         case ScriptError::TAPROOT_INVALID_SIG:
             return "Taproot key spend failed";
+        case ScriptError::OP_CODESEPARATOR:
+            return "Using OP_CODESEPARATOR in non-witness script";
+        case ScriptError::SIG_FINDANDDELETE:
+            return "Signature is found in scriptCode";
         case ScriptError::UNKNOWN:
         case ScriptError::ERROR_COUNT:
         default:

@@ -183,12 +183,13 @@ public:
  * returned, the fSuccess variable indicates whether the signature check itself
  * succeeded.
  */
-static bool EvalChecksig(const valtype &vchSig, const valtype &vchPubKey,
-                         CScript::const_iterator pbegincodehash,
-                         CScript::const_iterator pend, uint32_t flags,
-                         const BaseSignatureChecker &checker,
-                         ScriptExecutionMetrics &metrics, ScriptError *serror,
-                         bool &fSuccess) {
+static bool EvalChecksigPreTaproot(
+    const valtype &vchSig, const valtype &vchPubKey,
+    CScript::const_iterator pbegincodehash,
+    CScript::const_iterator pend, uint32_t flags,
+    const BaseSignatureChecker &checker,
+    ScriptExecutionMetrics &metrics, ScriptError *serror,
+    bool &fSuccess) {
     if (!CheckTransactionSignatureEncoding(vchSig, flags, serror) ||
         !CheckPubKeyEncoding(vchPubKey, flags, serror)) {
         // serror is set
@@ -220,12 +221,12 @@ static bool EvalChecksig(const valtype &vchSig, const valtype &vchPubKey,
  * returned, the fSuccess variable indicates whether the signature check itself
  * succeeded.
  */
-static bool EvalChecksigTaproot(const valtype &vchSig, const valtype &vchPubKey,
-                                uint32_t flags, SigVersion sigversion,
-                                const BaseSignatureChecker &checker,
-                                ScriptExecutionMetrics &metrics,
-                                ScriptError *serror,
-                                bool &fSuccess) {
+static bool EvalChecksigTaproot(
+    const valtype &vchSig, const valtype &vchPubKey,
+    uint32_t flags, const BaseSignatureChecker &checker,
+    ScriptExecutionMetrics &metrics,
+    ScriptError *serror,
+    bool &fSuccess) {
     if (!CheckTransactionSignatureEncoding(vchSig, flags, serror) ||
         !CheckPubKeyEncoding(vchPubKey, flags, serror)) {
         // serror is set
@@ -243,6 +244,30 @@ static bool EvalChecksigTaproot(const valtype &vchSig, const valtype &vchPubKey,
     return true;
 }
 
+/** Helper for OP_CHECKSIG and OP_CHECKSIGVERIFY.
+ *
+ * A return value of false means the script fails entirely. When true is returned, the
+ * success variable indicates whether the signature check itself succeeded.
+ */
+static bool EvalChecksig(
+    const valtype& vchSig, const valtype& vchPubKey,
+    CScript::const_iterator pbegincodehash, CScript::const_iterator pend,
+    unsigned int flags, const BaseSignatureChecker& checker,
+    SigVersion sigversion, ScriptExecutionMetrics &metrics,
+    ScriptError* serror, bool& success)
+{
+    switch (sigversion) {
+    case SigVersion::BASE:
+        return EvalChecksigPreTapscript(vchSig, vchPubKey, pbegincodehash, pend, flags, checker, serror, success);
+    case SigVersion::TAPSCRIPT:
+        return EvalChecksigTapscript(vchSig, vchPubKey, flags, checker, sigversion, serror, success);
+    case SigVersion::TAPROOT:
+        // Key path spending in Taproot has no script, so this is unreachable.
+        break;
+    }
+    assert(false);
+}
+
 bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                 uint32_t flags, const BaseSignatureChecker &checker,
                 SigVersion sigversion, ScriptExecutionData& execdata,
@@ -252,6 +277,9 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
     static const valtype vchFalse(0);
     static const valtype vchTrue(1, 1);
 
+    // sigversion cannot be TAPROOT here, as it admits no script execution.
+    assert(sigversion == SigVersion::BASE || sigversion == SigVersion::WITNESS_V0 || sigversion == SigVersion::TAPSCRIPT);
+
     CScript::const_iterator pc = script.begin();
     CScript::const_iterator pend = script.end();
     CScript::const_iterator pbegincodehash = script.begin();
@@ -260,14 +288,17 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
     ConditionStack vfExec;
     std::vector<valtype> altstack;
     set_error(serror, ScriptError::UNKNOWN);
-    if (script.size() > MAX_SCRIPT_SIZE) {
+    if (sigversion == SigVersion::BASE && script.size() > MAX_SCRIPT_SIZE) {
         return set_error(serror, ScriptError::SCRIPT_SIZE);
     }
     int nOpCount = 0;
     constexpr bool fRequireMinimal = true;
+    uint32_t opcode_pos = 0;
+    execdata.m_codeseparator_pos = 0xFFFFFFFFUL;
+    execdata.m_codeseparator_pos_init = true;
 
     try {
-        while (pc < pend) {
+        for (; pc < pend; ++opcode_pos) {
             bool fExec = vfExec.all_true();
 
             //
@@ -280,15 +311,21 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
                 return set_error(serror, ScriptError::PUSH_SIZE);
             }
 
-            // Note how OP_RESERVED does not count towards the opcode limit.
-            if (opcode > OP_16 && ++nOpCount > MAX_OPS_PER_SCRIPT) {
-                return set_error(serror, ScriptError::OP_COUNT);
+            if (sigversion == SigVersion::BASE) {
+                // Note how OP_RESERVED does not count towards the opcode limit.
+                if (opcode > OP_16 && ++nOpCount > MAX_OPS_PER_SCRIPT) {
+                    return set_error(serror, ScriptError::OP_COUNT);
+                }
+
+                // Some opcodes are disabled (CVE-2010-5137).
+                if (IsOpcodeDisabled(opcode, flags)) {
+                    return set_error(serror, ScriptError::DISABLED_OPCODE);
+                }
             }
 
-            // Some opcodes are disabled (CVE-2010-5137).
-            if (IsOpcodeDisabled(opcode, flags)) {
-                return set_error(serror, ScriptError::DISABLED_OPCODE);
-            }
+            // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
+            if (opcode == OP_CODESEPARATOR && sigversion == SigVersion::BASE && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
+                return set_error(serror, SCRIPT_ERR_OP_CODESEPARATOR);
 
             if (fExec && 0 <= opcode && opcode <= OP_PUSHDATA4) {
                 if (fRequireMinimal &&
@@ -962,7 +999,7 @@ bool EvalScript(std::vector<valtype> &stack, const CScript &script,
 
                         bool fSuccess = false;
                         if (!EvalChecksig(vchSig, vchPubKey, pbegincodehash,
-                                          pend, flags, checker, metrics, serror,
+                                          pend, flags, checker, sigversion, metrics, serror,
                                           fSuccess)) {
                             return false;
                         }
@@ -1620,10 +1657,19 @@ static const CHashWriter HASHER_TAPTWEAK = TaggedHash("TapTweak");
 template<typename T>
 bool SignatureHashTaproot(uint256& hash_out, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache)
 {
-    uint8_t ext_flag;
+    uint8_t ext_flag, key_version;
     switch (sigversion) {
     case SigVersion::TAPROOT:
         ext_flag = 0;
+        // key_version is not used and left uninitialized.
+        break;
+    case SigVersion::TAPSCRIPT:
+        ext_flag = 1;
+        // key_version must be 0 for now, representing the current version of
+        // 32-byte public keys in the tapscript signature opcode execution.
+        // An upgradable public key version (with a size not 32-byte) may
+        // request a different key_version with a new sigversion.
+        key_version = 0;
         break;
     default:
         assert(false);
@@ -1673,6 +1719,15 @@ bool SignatureHashTaproot(uint256& hash_out, const T& tx_to, uint32_t in_pos, ui
         CHashWriter sha_single_output(SER_GETHASH, 0);
         sha_single_output << tx_to.vout[in_pos];
         ss << sha_single_output.GetSHA256();
+    }
+
+    // Additional data for BIP 342 signatures
+    if (sigversion == SigVersion::TAPSCRIPT) {
+        assert(execdata.m_tapleaf_hash_init);
+        ss << execdata.m_tapleaf_hash;
+        ss << key_version;
+        assert(execdata.m_codeseparator_pos_init);
+        ss << execdata.m_codeseparator_pos;
     }
 
     hash_out = ss.GetSHA256();
@@ -1926,12 +1981,12 @@ bool GenericTransactionSignatureChecker<T>::CheckSequence(
 template class GenericTransactionSignatureChecker<CTransaction>;
 template class GenericTransactionSignatureChecker<CMutableTransaction>;
 
-static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script)
+static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script, uint256& tapleaf_hash)
 {
     const int path_len = (control.size() - TAPROOT_CONTROL_BASE_SIZE) / TAPROOT_CONTROL_NODE_SIZE;
     const CPubKey p{control.begin() + 1, control.begin() + TAPROOT_CONTROL_BASE_SIZE};
     const CPubKey q{program};
-    uint256 tapleaf_hash = (CHashWriter(HASHER_TAPLEAF) << uint8_t(control[0] & TAPROOT_LEAF_MASK) << script).GetSHA256();
+    tapleaf_hash = (CHashWriter(HASHER_TAPLEAF) << uint8_t(control[0] & TAPROOT_LEAF_MASK) << script).GetSHA256();
     uint256 k = tapleaf_hash;
     for (int i = 0; i < path_len; ++i) {
         CHashWriter ss_branch{HASHER_TAPBRANCH};
@@ -2006,8 +2061,14 @@ bool VerifyScript(const CScript &scriptSig, const CScript &scriptPubKey,
             if (control.size() < TAPROOT_CONTROL_BASE_SIZE || control.size() > TAPROOT_CONTROL_MAX_SIZE || ((control.size() - TAPROOT_CONTROL_BASE_SIZE) % TAPROOT_CONTROL_NODE_SIZE) != 0) {
                 return set_error(serror, ScriptError::TAPROOT_WRONG_CONTROL_SIZE);
             }
-            if (!VerifyTaprootCommitment(control, taproot_program, exec_script)) {
+            if (!VerifyTaprootCommitment(control, taproot_program, exec_script, execdata.m_tapleaf_hash)) {
                 return set_error(serror, ScriptError::TAPROOT_PROGRAM_MISMATCH);
+            execdata.m_tapleaf_hash_init = true;
+            if ((control[0] & TAPROOT_LEAF_MASK) == TAPROOT_LEAF_TAPSCRIPT) {
+                // Tapscript (leaf version 0xc0)
+                return ExecuteWitnessScript(stack, exec_script, flags, SigVersion::TAPSCRIPT, checker, execdata, serror);
+            }
+            return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION);
             }
             return set_success(serror);
         }

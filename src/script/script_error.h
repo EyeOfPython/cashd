@@ -87,6 +87,10 @@ enum class ScriptError {
     TAPROOT_DISABLED_ANNEX,
     TAPROOT_INVALID_SIG,
 
+    /* Constant scriptCode */
+    OP_CODESEPARATOR,
+    SIG_FINDANDDELETE,
+
     /* Auxiliary errors (unused by interpreter) */
     SIGCHECKS_LIMIT_EXCEEDED,
 

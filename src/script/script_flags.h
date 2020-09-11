@@ -48,6 +48,18 @@ enum {
     // Note: The Segwit Recovery feature is a (currently moot) exception to
     // VERIFY_INPUT_SIGCHECKS
     SCRIPT_VERIFY_INPUT_SIGCHECKS = (1U << 22),
+
+    // Making OP_CODESEPARATOR and FindAndDelete fail any non-segwit scripts
+    //
+    SCRIPT_VERIFY_CONST_SCRIPTCODE = (1U << 23),
+
+    // Taproot/Tapscript validation (BIPs 341 & 342)
+    //
+    SCRIPT_VERIFY_TAPROOT = (1U << 24),
+
+    // Making unknown Taproot leaf versions non-standard
+    //
+    SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION = (1U << 25),
 };
 
 #endif // BITCOIN_SCRIPT_SCRIPT_FLAGS_H
