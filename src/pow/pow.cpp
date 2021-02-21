@@ -31,12 +31,8 @@ uint32_t GetNextWorkRequired(const CBlockIndex *pindexPrev,
         return pindexPrev->nBits;
     }
 
-    if (IsAxionEnabled(params, pindexPrev)) {
+    if (pindexPrev->pprev) {
         return GetNextASERTWorkRequired(pindexPrev, pblock, params);
-    }
-
-    if (IsDAAEnabled(params, pindexPrev)) {
-        return GetNextDAAWorkRequired(pindexPrev, pblock, params);
     }
 
     return GetNextEDAWorkRequired(pindexPrev, pblock, params);
