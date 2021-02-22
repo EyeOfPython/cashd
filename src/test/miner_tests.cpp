@@ -28,6 +28,12 @@
 #include <boost/test/unit_test.hpp>
 
 #include <memory>
+
+#include <protocol.h>
+#include <univalue.h>
+#include <streams.h>
+#include <minerfund.h>
+#include <primitives/block.h>
 #include <pow/pow.h>
 
 namespace miner_tests {
@@ -54,39 +60,128 @@ BlockAssembler MinerTestingSetup::AssemblerForTest(const CChainParams &params) {
     return BlockAssembler(params, *m_node.mempool, options);
 }
 
-constexpr static struct {
+static struct {
     uint8_t extranonce;
     uint32_t nonce;
 } blockinfo[] = {
-    {2, 0x97a370c4}, {3,  0x2661ae42}, {2, 0x4a197044}, {4,  0x8ed93a46},
-    {2, 0xfb8032c2}, {2,  0xb254623e}, {2, 0x3792c05b}, {3,  0x329b0f7d},
-    {3, 0x1fdcd0f6}, {13, 0x68a8acb9}, {2, 0x486aa328}, {7,  0x54b615a2},
-    {6, 0x8b6c5636}, {10, 0x44d4159b}, {7, 0xab718100}, {4,  0xac18621f},
-    {5, 0xb3d6b4f7}, {3,  0x15486857}, {2, 0xff5e5b2a}, {6,  0x6ae15f86},
-    {4, 0x4cfaa426}, {2,  0xa32e2ab2}, {2, 0x68fce1de}, {2,  0x8553c3fe},
-    {2, 0x72c10730}, {2,  0x0fdae050}, {2, 0x6602c7a0}, {3,  0x2fdde145},
-    {5, 0x0ed2e715}, {7,  0x3953e5f8}, {3, 0x7d21a613}, {2,  0xb2725170},
-    {3, 0xa4c921cf}, {2,  0x0aa87056}, {2, 0xd1508092}, {4,  0x53c137b2},
-    {2, 0xa5bfb006}, {2,  0xdd200659}, {3, 0x5ce45789}, {2,  0xd57ca754},
-    {2, 0xabdf406e}, {4,  0xbcefc309}, {5, 0xccd062b9}, {2,  0xa4db21c3},
-    {3, 0xb673a715}, {3,  0x205e4702}, {3, 0xcec2859e}, {2,  0xbc2ba701},
-    {2, 0xd6837046}, {2,  0x4a0593ef}, {2, 0x5eeeb283}, {13, 0x22397a97},
-    {2, 0x31cc6463}, {3,  0xb3fc0716}, {4, 0x3299d7c1}, {2,  0x3a6d0c51},
-    {2, 0x9edd6d17}, {2,  0x6dce7a55}, {2, 0xe70c9925}, {3,  0x6b874479},
-    {7, 0x071241ca}, {4,  0xf7f26707}, {2, 0xc29ef5ae}, {6,  0x5c3d21b7},
-    {3, 0x3bca753c}, {3,  0x73a543c4}, {5, 0xb3384572}, {3,  0xbb78de4e},
-    {7, 0x2119c7c6}, {5,  0xdaa851e3}, {3, 0x279fe081}, {4,  0x6e894353},
-    {2, 0xa3b57648}, {2,  0xf53816bb}, {3, 0xa785a43f}, {3,  0xa4a813ab},
-    {4, 0xdee3b283}, {4,  0x9e0eef78}, {4, 0x0f87df2f}, {4,  0x8b76a010},
-    {2, 0xefc5c3e4}, {2,  0x32662ae3}, {2, 0xa8f47138}, {2,  0xc550b341},
-    {3, 0xa550cb97}, {2,  0x55955315}, {2, 0x4c3f3038}, {4,  0x1658a340},
-    {7, 0x29f9333b}, {3,  0xdf97ae03}, {5, 0x321aa10b}, {2,  0x9f3c21cf},
-    {3, 0x3568a31c}, {4,  0xceef8301}, {3, 0x09645c63}, {4,  0xb328d56f},
-    {4, 0xc4de303b}, {2,  0x50f80a5b}, {3, 0x1455e14c}, {4,  0x3da25948},
-    {2, 0x1fbb494e}, {8,  0xa41ad1b4}, {2, 0xee911aa6}, {2,  0xaea15a0c},
-    {8, 0xbcc24752}, {3,  0x41aa8978}, {2, 0x41795716}, {6,  0x7d6e019},
-    {3, 0xeb30b104}, {2,  0x88ba4d3c},
+    {1, 0xa9d9c5fe},
+    {2, 0xc4b8f377},
+    {3, 0x8cec161a},
+    {2, 0xc8925628},
+    {4, 0x93d0d611},
+    {3, 0x7c29a703},
+    {3, 0x8a6bc0cf},
+    {3, 0x2465935c},
+    {3, 0xf0f476c},
+    {2, 0xef5d7122},
+    {2, 0x4b087dbb},
+    {7, 0x235022d6},
+    {6, 0xc2c3826a},
+    {2, 0x92690b46},
+    {3, 0x830ba6df},
+    {3, 0x4795b60c},
+    {3, 0x35f3a371},
+    {7, 0x32bdcc5a},
+    {2, 0x36d83317},
+    {2, 0xf969821f},
+    {2, 0x5b4f9557},
+    {3, 0xddc3615b},
+    {5, 0x51f1a035},
+    {2, 0x77002254},
+    {2, 0x869f5483},
+    {5, 0xcaa4124c},
+    {4, 0x4e21d602},
+    {2, 0x596b2682},
+    {6, 0x86138a56},
+    {2, 0x9369a47e},
+    {4, 0x5021fd5a},
+    {3, 0x21171231},
+    {5, 0xdc6354c2},
+    {4, 0xaf793398},
+    {7, 0xcbcd4420},
+    {2, 0x4c1c9d3a},
+    {2, 0x69a0f516},
+    {2, 0x2364ce17},
+    {2, 0xb3b69f17},
+    {4, 0xe9c321b7},
+    {3, 0xb6f6f428},
+    {2, 0x4733a0c9},
+    {3, 0xb5d33bb1},
+    {3, 0xf336f30b},
+    {2, 0xd087fb0d},
+    {4, 0x1ff66b53},
+    {2, 0x387afa08},
+    {4, 0x443bb267},
+    {2, 0x7a1fb0b9},
+    {5, 0x3a8ba32c},
+    {2, 0x8c0697da},
+    {2, 0xf5a4f102},
+    {5, 0xf477273c},
+    {3, 0x5c0f034f},
+    {2, 0x30aaf20f},
+    {4, 0x4629c230},
+    {5, 0xb462d5d8},
+    {3, 0xa49aa341},
+    {2, 0x8e3a5054},
+    {2, 0x9d707117},
+    {5, 0x3b42f1f8},
+    {8, 0x3f6970f8},
+    {3, 0xc3602553},
+    {4, 0xd7292359},
+    {3, 0xa2d7376b},
+    {2, 0xf282f2d1},
+    {2, 0x5117d19d},
+    {2, 0x8bb4d4a4},
+    {3, 0x6e2a9215},
+    {2, 0xaa6dd69a},
+    {5, 0xeb84a25d},
+    {3, 0x72a46283},
+    {6, 0x8fe23560},
+    {4, 0xe1d57199},
+    {2, 0xad2b20f9},
+    {4, 0xa822336e},
+    {4, 0xc8396717},
+    {5, 0x7edc2643},
+    {2, 0x4b5cf149},
+    {4, 0x93c9b04d},
+    {4, 0xceb3c24d},
+    {3, 0x4bbd53af},
+    {2, 0x4373d535},
+    {7, 0x57e0e029},
+    {4, 0xbbfe817d},
+    {5, 0xc7e2f34e},
+    {5, 0xb209b138},
+    {3, 0xb409840d},
+    {5, 0x689b56df},
+    {5, 0x470bc66f},
+    {4, 0xe4d5e5bc},
+    {6, 0x4dbe07ef},
+    {3, 0x65cf461},
+    {2, 0x9e7f85fd},
+    {6, 0xdbbf0088},
+    {3, 0x4551238e},
+    {6, 0x1540602a},
+    {5, 0x8da1b40c},
+    {3, 0xd99ad4c2},
+    {2, 0x1dc69662},
+    {7, 0xd71c023f},
+    {4, 0xfedcb0ab},
+    {2, 0x2e41f5bf},
+    {11, 0x5c71e723},
+    {2, 0x250c4bb},
+    {3, 0xfa31126},
+    {2, 0xc82ad791},
+    {4, 0x9f0ed069},
+    {3, 0x78a2c083},
+    {4, 0x21ab4081},
 };
+
+const Amount BLOCKSUBSIDY = 50 * COIN;
+const Amount MINERREWARD = BLOCKSUBSIDY - GetMinerFundAmount(BLOCKSUBSIDY);
+const uint64_t MINERREWARD_INT = MINERREWARD / SATOSHI;
+const Amount LOWFEE = CENT;
+const Amount HIGHFEE = COIN;
+const Amount HIGHERFEE = 4 * COIN;
 
 static CBlockIndex CreateBlockIndex(int nHeight)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
@@ -112,7 +207,7 @@ void MinerTestingSetup::TestPackageSelection(
     tx.vin[0].scriptSig = CScript() << OP_1;
     tx.vin[0].prevout = COutPoint(txFirst[0]->GetId(), 0);
     tx.vout.resize(1);
-    tx.vout[0].nValue = int64_t(5000000000LL - 1000) * SATOSHI;
+    tx.vout[0].nValue = int64_t(MINERREWARD_INT - 1000) * SATOSHI;
     // This tx has a low fee: 1000 satoshis.
     // Save this txid for later use.
     TxId parentTxId = tx.GetId();
@@ -123,7 +218,7 @@ void MinerTestingSetup::TestPackageSelection(
 
     // This tx has a medium fee: 10000 satoshis.
     tx.vin[0].prevout = COutPoint(txFirst[1]->GetId(), 0);
-    tx.vout[0].nValue = int64_t(5000000000LL - 10000) * SATOSHI;
+    tx.vout[0].nValue = int64_t(MINERREWARD_INT - 10000) * SATOSHI;
     TxId mediumFeeTxId = tx.GetId();
     m_node.mempool->addUnchecked(entry.Fee(10000 * SATOSHI)
                                      .Time(GetTime())
@@ -133,7 +228,7 @@ void MinerTestingSetup::TestPackageSelection(
     // This tx has a high fee, but depends on the first transaction.
     tx.vin[0].prevout = COutPoint(parentTxId, 0);
     // 50k satoshi fee.
-    tx.vout[0].nValue = int64_t(5000000000LL - 1000 - 50000) * SATOSHI;
+    tx.vout[0].nValue = int64_t(MINERREWARD_INT - 1000 - 50000) * SATOSHI;
     TxId highFeeTxId = tx.GetId();
     m_node.mempool->addUnchecked(entry.Fee(50000 * SATOSHI)
                                      .Time(GetTime())
@@ -149,7 +244,7 @@ void MinerTestingSetup::TestPackageSelection(
     // Test that a package below the block min tx fee doesn't get included
     tx.vin[0].prevout = COutPoint(highFeeTxId, 0);
     // 0 fee.
-    tx.vout[0].nValue = int64_t(5000000000LL - 1000 - 50000) * SATOSHI;
+    tx.vout[0].nValue = int64_t(MINERREWARD_INT - 1000 - 50000) * SATOSHI;
     TxId freeTxId = tx.GetId();
     m_node.mempool->addUnchecked(entry.Fee(Amount::zero()).FromTx(tx));
     size_t freeTxSize = GetSerializeSize(tx, PROTOCOL_VERSION);
@@ -160,7 +255,7 @@ void MinerTestingSetup::TestPackageSelection(
 
     tx.vin[0].prevout = COutPoint(freeTxId, 0);
     tx.vout[0].nValue =
-        int64_t(5000000000LL - 1000 - 50000) * SATOSHI - feeToUse;
+        int64_t(MINERREWARD_INT - 1000 - 50000) * SATOSHI - feeToUse;
     TxId lowFeeTxId = tx.GetId();
     m_node.mempool->addUnchecked(entry.Fee(feeToUse).FromTx(tx));
     pblocktemplate = AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey);
@@ -188,7 +283,7 @@ void MinerTestingSetup::TestPackageSelection(
     // 0-fee transaction that has 2 outputs.
     tx.vin[0].prevout = COutPoint(txFirst[2]->GetId(), 0);
     tx.vout.resize(2);
-    tx.vout[0].nValue = int64_t(5000000000LL - 100000000) * SATOSHI;
+    tx.vout[0].nValue = int64_t(MINERREWARD_INT - 100000000) * SATOSHI;
     // 1BCC output.
     tx.vout[1].nValue = 100000000 * SATOSHI;
     TxId freeTxId2 = tx.GetId();
@@ -199,7 +294,7 @@ void MinerTestingSetup::TestPackageSelection(
     tx.vin[0].prevout = COutPoint(freeTxId2, 0);
     tx.vout.resize(1);
     feeToUse = blockMinFeeRate.GetFee(freeTxSize);
-    tx.vout[0].nValue = int64_t(5000000000LL - 100000000) * SATOSHI - feeToUse;
+    tx.vout[0].nValue = int64_t(MINERREWARD_INT - 100000000) * SATOSHI - feeToUse;
     TxId lowFeeTxId2 = tx.GetId();
     m_node.mempool->addUnchecked(
         entry.Fee(feeToUse).SpendsCoinbase(false).FromTx(tx));
@@ -256,6 +351,126 @@ BOOST_AUTO_TEST_CASE(CheckCoinbase_EB) {
     TestCoinbaseMessageEB(8320000, "/EB8.3/", *m_node.mempool);
 }
 
+#include <event2/buffer.h>
+#include <event2/bufferevent.h>
+#include <event2/event.h>
+#include <event2/thread.h>
+#include <event2/http.h>
+#include <event2/util.h>
+
+static uint8_t lastExtraNonce = 0;
+static std::map<uint256, uint8_t> merkleRootToExtraNonce;
+static event_base *mine_event_base;
+static size_t blockIdx = 0;
+
+void updateExtraNonce(CBlock *pblock, uint8_t extraNonce) {
+    CMutableTransaction txCoinbase(*pblock->vtx[0]);
+    txCoinbase.nVersion = 1;
+    txCoinbase.vin[0].scriptSig[0] = extraNonce;
+    pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
+    pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+}
+
+static void mine_request_cb(struct evhttp_request *req, void *arg) {
+    CBlock *pblock = (CBlock *)arg;
+    struct evbuffer *buf = evhttp_request_get_input_buffer(req);
+    if (!buf) {
+        return;
+    }
+    size_t size = evbuffer_get_length(buf);
+    const char *data = (const char *)evbuffer_pullup(buf, size);
+    if (!data) {
+        return;
+    }
+    std::string body(data, size);
+    evbuffer_drain(buf, size);
+    UniValue jsonBody;
+    jsonBody.read(body);
+    const UniValue &paramsArray = find_value(jsonBody, "params").get_array();
+    const std::vector<UniValue> &params = paramsArray.getValues();
+    std::string reply;
+    bool stop = false;
+    if (!params.empty()) {
+        std::vector<uint8_t> powData = ParseHex(params[0].get_str());
+        std::vector<uint8_t> headerData(powData.begin(), powData.begin() + 80);
+        for (size_t idx = 0; idx < headerData.size(); idx += 4) {
+            std::reverse(headerData.begin() + idx, headerData.begin() + idx + 4);
+        }
+        CDataStream headerStream(headerData, SER_NETWORK, PROTOCOL_VERSION);
+        CBlockHeader header;
+        headerStream >> header;
+        LogPrintf("Got hash: %s\n", header.GetHash());
+        std::map<uint256, uint8_t>::iterator nonceEntry = merkleRootToExtraNonce.find(header.hashMerkleRoot);
+        if (nonceEntry != merkleRootToExtraNonce.end()) {
+            LogPrintf("Got PoW: extranonce=%d, nonce=%d\n", nonceEntry->second, header.nNonce);
+            pblock->nNonce = header.nNonce;
+            updateExtraNonce(pblock, nonceEntry->second);
+            LogPrintf("Merkle roots: pblock=%s, header=%s\n", pblock->hashMerkleRoot.ToString(), header.hashMerkleRoot.ToString());
+            if (pblock->hashMerkleRoot != header.hashMerkleRoot) {
+                reply = "{\"result\":false}";
+            } else {
+                reply = "{\"result\":true}";
+                stop = true;
+                blockinfo[blockIdx] = {nonceEntry->second, header.nNonce};
+                LogPrintf("New blockinfo: \n");
+                for (size_t i = 0; i < sizeof(blockinfo) / sizeof(*blockinfo); ++i) {
+                    LogPrintf("{%d, 0x%x},\n", blockinfo[i].extranonce, blockinfo[i].nonce);
+                }
+            }
+        } else {
+            LogPrintf("Unknown merkle root: %s\n", header.hashMerkleRoot.ToString());
+            reply = "{\"result\":false}";
+        }
+    } else {
+        lastExtraNonce++;
+        updateExtraNonce(pblock, lastExtraNonce);
+        merkleRootToExtraNonce[pblock->hashMerkleRoot] = lastExtraNonce;
+        CDataStream headerStream(SER_NETWORK, PROTOCOL_VERSION);
+        headerStream << pblock->GetBlockHeader();
+        for (size_t idx = 0; idx < headerStream.size(); idx += 4) {
+            std::reverse(headerStream.begin() + idx, headerStream.begin() + idx + 4);
+        }
+
+        arith_uint256 bnTarget;
+        bool fNegative;
+        bool fOverflow;
+        bnTarget.SetCompact(pblock->nBits, &fNegative, &fOverflow);
+        
+        std::ostringstream replyStream;
+        replyStream << "{\"result\":{\"data\":\"";
+        replyStream << HexStr(headerStream);
+        replyStream << "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
+        replyStream << "\",\"target\":\"";
+        replyStream << HexStr(ArithToUint256(bnTarget));
+        replyStream << "\"},\"error\": null}";
+
+        reply = replyStream.str();
+    }
+    
+    struct evbuffer *evb = evhttp_request_get_output_buffer(req);
+    assert(evb);
+    evbuffer_add(evb, reply.data(), reply.size());
+    evhttp_send_reply(req, 200, nullptr, nullptr);
+    if (stop) {
+        sleep(1);
+        event_base_loopbreak(mine_event_base);
+    }
+}
+
+/** libevent event log callback */
+static void libevent_log_cb(int severity, const char *msg) {
+#ifndef EVENT_LOG_WARN
+// EVENT_LOG_WARN was added in 2.0.19; but before then _EVENT_LOG_WARN existed.
+#define EVENT_LOG_WARN _EVENT_LOG_WARN
+#endif
+    // Log warn messages and higher without debug category.
+    if (severity >= EVENT_LOG_WARN) {
+        LogPrintf("libevent: %s\n", msg);
+    } else {
+        LogPrint(BCLog::LIBEVENT, "libevent: %s\n", msg);
+    }
+}
+
 // NOTE: These tests rely on CreateNewBlock doing its own self-validation!
 BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     // Note that by default, these tests run with size accounting enabled.
@@ -286,6 +501,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     int baseheight = 0;
     std::vector<CTransactionRef> txFirst;
     for (size_t i = 0; i < sizeof(blockinfo) / sizeof(*blockinfo); ++i) {
+        blockIdx = i;
         // pointer for convenience.
         CBlock *pblock = &pblocktemplate->block;
         {
@@ -297,7 +513,6 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
             txCoinbase.vin[0].scriptSig = CScript();
             txCoinbase.vin[0].scriptSig.push_back(blockinfo[i].extranonce);
             txCoinbase.vin[0].scriptSig.push_back(::ChainActive().Height());
-            txCoinbase.vout.resize(1);
             txCoinbase.vout[0].scriptPubKey = CScript();
             pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
             if (txFirst.size() == 0) {
@@ -311,8 +526,31 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
             CBlockHeader header = pblock->GetBlockHeader();
             pblock->nBits = GetNextWorkRequired(::ChainActive().Tip(), &header, chainparams);
         }
+        arith_uint256 bnTarget;
+        bool fNegative;
+        bool fOverflow;
+        bnTarget.SetCompact(pblock->nBits, &fNegative, &fOverflow);
+        bool alreadyValid;
+        alreadyValid = UintToArith256(pblock->GetHash()) <= bnTarget;
+        if(!alreadyValid) {
+            event_set_log_callback(&libevent_log_cb);
+            evthread_use_pthreads();
+            mine_event_base = event_base_new();
+            evhttp *mine_http = evhttp_new(mine_event_base);
+            evhttp_set_gencb(mine_http, mine_request_cb, pblock);
+            evhttp_bind_socket(mine_http, "127.0.0.1", 3000);
+            LogPrintf("Waiting for getwork requests...\n");
+            event_base_dispatch(mine_event_base);
+            merkleRootToExtraNonce.clear();
+            lastExtraNonce = 0;
+            evhttp_free(mine_http);
+            event_base_free(mine_event_base);
+        }
         std::shared_ptr<const CBlock> shared_pblock =
             std::make_shared<const CBlock>(*pblock);
+        CDataStream headerStream(SER_NETWORK, PROTOCOL_VERSION);
+        headerStream << shared_pblock->GetBlockHeader();
+        LogPrintf("Made header: %s\n", HexStr(headerStream));
         BOOST_CHECK(
             Assert(m_node.chainman)
                 ->ProcessNewBlock(config, shared_pblock, true, nullptr));
@@ -326,11 +564,6 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     BOOST_CHECK(pblocktemplate =
                     AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey));
 
-    const Amount BLOCKSUBSIDY = 50 * COIN;
-    const Amount LOWFEE = CENT;
-    const Amount HIGHFEE = COIN;
-    const Amount HIGHERFEE = 4 * COIN;
-
     // block size > limit
     tx.vin.resize(1);
     tx.vin[0].scriptSig = CScript();
@@ -343,7 +576,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     tx.vin[0].scriptSig << OP_1;
     tx.vin[0].prevout = COutPoint(txFirst[0]->GetId(), 0);
     tx.vout.resize(1);
-    tx.vout[0].nValue = BLOCKSUBSIDY;
+    tx.vout[0].nValue = MINERREWARD;
     for (unsigned int i = 0; i < 128; ++i) {
         tx.vout[0].nValue -= LOWFEE;
         const TxId txid = tx.GetId();
@@ -370,7 +603,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     // Child with higher priority than parent.
     tx.vin[0].scriptSig = CScript() << OP_1;
     tx.vin[0].prevout = COutPoint(txFirst[1]->GetId(), 0);
-    tx.vout[0].nValue = BLOCKSUBSIDY - HIGHFEE;
+    tx.vout[0].nValue = MINERREWARD - HIGHFEE;
     TxId txid = tx.GetId();
     m_node.mempool->addUnchecked(
         entry.Fee(HIGHFEE).Time(GetTime()).SpendsCoinbase(true).FromTx(tx));
@@ -379,7 +612,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     tx.vin[1].scriptSig = CScript() << OP_1;
     tx.vin[1].prevout = COutPoint(txFirst[0]->GetId(), 0);
     // First txn output + fresh coinbase - new txn fee.
-    tx.vout[0].nValue = tx.vout[0].nValue + BLOCKSUBSIDY - HIGHERFEE;
+    tx.vout[0].nValue = tx.vout[0].nValue + MINERREWARD - HIGHERFEE;
     txid = tx.GetId();
     m_node.mempool->addUnchecked(
         entry.Fee(HIGHERFEE).Time(GetTime()).SpendsCoinbase(true).FromTx(tx));
@@ -405,7 +638,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     // Double spend txn pair in mempool, template creation fails.
     tx.vin[0].prevout = COutPoint(txFirst[0]->GetId(), 0);
     tx.vin[0].scriptSig = CScript() << OP_1;
-    tx.vout[0].nValue = BLOCKSUBSIDY - HIGHFEE;
+    tx.vout[0].nValue = MINERREWARD - HIGHFEE;
     tx.vout[0].scriptPubKey = CScript() << OP_1;
     txid = tx.GetId();
     m_node.mempool->addUnchecked(
@@ -452,7 +685,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     // Invalid p2sh txn in mempool, template creation fails
     tx.vin[0].prevout = COutPoint(txFirst[0]->GetId(), 0);
     tx.vin[0].scriptSig = CScript() << OP_1;
-    tx.vout[0].nValue = BLOCKSUBSIDY - LOWFEE;
+    tx.vout[0].nValue = MINERREWARD - LOWFEE;
     script = CScript() << OP_0;
     tx.vout[0].scriptPubKey = GetScriptForDestination(ScriptHash(script));
     txid = tx.GetId();
@@ -498,7 +731,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     tx.vin[0].nSequence = ::ChainActive().Tip()->nHeight + 1;
     prevheights[0] = baseheight + 1;
     tx.vout.resize(1);
-    tx.vout[0].nValue = BLOCKSUBSIDY - HIGHFEE;
+    tx.vout[0].nValue = MINERREWARD - HIGHFEE;
     tx.vout[0].scriptPubKey = CScript() << OP_1;
     tx.nLockTime = 0;
     txid = tx.GetId();
