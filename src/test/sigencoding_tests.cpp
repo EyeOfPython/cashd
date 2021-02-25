@@ -214,18 +214,12 @@ BOOST_AUTO_TEST_CASE(checksignatureencoding_test) {
         // Signatures are valid as long as the hashtype is correct.
         CheckSignatureEncodingWithSigHashType(minimalSig, flags);
 
-        if (flags & SCRIPT_VERIFY_LOW_S) {
-            // If we do enforce low S, then high S sigs are rejected.
-            BOOST_CHECK(!CheckDataSignatureEncoding(highSSig, flags, &err));
-            BOOST_CHECK(err == ScriptError::SIG_HIGH_S);
-        } else {
-            // If we do not enforce low S, then high S sigs are accepted.
-            CheckSignatureEncodingWithSigHashType(highSSig, flags);
-        }
+        // We enforce low S, therefore high S sigs are rejected.
+        BOOST_CHECK(!CheckDataSignatureEncoding(highSSig, flags, &err));
+        BOOST_CHECK(err == ScriptError::SIG_HIGH_S);
 
         for (const valtype &nonDERSig : nonDERSigs) {
-            if (flags & (SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S |
-                         SCRIPT_VERIFY_STRICTENC)) {
+            if (flags & (SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_STRICTENC)) {
                 // If we get any of the dersig flags, the non canonical dersig
                 // signature fails.
                 BOOST_CHECK(
@@ -238,8 +232,7 @@ BOOST_AUTO_TEST_CASE(checksignatureencoding_test) {
         }
 
         for (const valtype &nonDERSig : nonParsableSigs) {
-            if (flags & (SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S |
-                         SCRIPT_VERIFY_STRICTENC)) {
+            if (flags & (SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_STRICTENC)) {
                 // If we get any of the dersig flags, the high S but non dersig
                 // signature fails.
                 BOOST_CHECK(

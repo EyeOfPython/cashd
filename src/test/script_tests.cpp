@@ -933,11 +933,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
 
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey2C) << OP_CHECKSIG,
-                    "P2PK with high S but no LOW_S", 0)
-            .PushSigECDSA(keys.key2, SigHashType(), 32, 33));
-    tests.push_back(
-        TestBuilder(CScript() << ToByteVector(keys.pubkey2C) << OP_CHECKSIG,
-                    "P2PK with high S", SCRIPT_VERIFY_LOW_S)
+                    "P2PK with high S", SCRIPT_VERIFY_NONE)
             .PushSigECDSA(keys.key2, SigHashType(), 32, 33)
             .SetScriptError(ScriptError::SIG_HIGH_S));
 
@@ -1191,7 +1187,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey1C) << OP_CHECKDATASIG,
                     "CHECKDATASIG with High S",
-                    checkdatasigflags | SCRIPT_VERIFY_LOW_S)
+                    checkdatasigflags)
             .PushDataSigECDSA(keys.key1, {}, 32, 33)
             .Num(0)
             .SetScriptError(ScriptError::SIG_HIGH_S));
@@ -1269,7 +1265,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
     tests.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey1C)
                                           << OP_CHECKDATASIGVERIFY << OP_TRUE,
                                 "CHECKDATASIG with High S",
-                                checkdatasigflags | SCRIPT_VERIFY_LOW_S)
+                                checkdatasigflags)
                         .PushDataSigECDSA(keys.key1, {}, 32, 33)
                         .Num(0)
                         .SetScriptError(ScriptError::SIG_HIGH_S));

@@ -25,11 +25,6 @@ enum {
     // failure (BIP62 rule 1)
     SCRIPT_VERIFY_DERSIG = (1U << 2),
 
-    // Passing a non-strict-DER signature or one with S > order/2 to a checksig
-    // operation causes script failure
-    // (BIP62 rule 5).
-    SCRIPT_VERIFY_LOW_S = (1U << 3),
-
     // Discourage use of NOPs reserved for upgrades (NOP1-10)
     //
     // Provided so that nodes can avoid accepting or mining transactions

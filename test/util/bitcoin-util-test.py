@@ -128,8 +128,9 @@ def bctest(testDir, testObj, buildenv):
         try:
             a_parsed = parse_output(outs[0], outputType)
         except Exception as e:
+            print(execrun)
             logging.error(
-                'Error parsing command output as {}: {}'.format(outputType, e))
+                'Error parsing command output ({}) as {}: {}'.format(outs, outputType, e))
             raise
         try:
             b_parsed = parse_output(outputData, outputType)

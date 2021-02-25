@@ -171,22 +171,13 @@ BOOST_AUTO_TEST_CASE(checkdatasig_test) {
         CheckError(flags, {validsig, {0x01}, pubkeyC}, scriptverify,
                     ScriptError::SIG_NULLFAIL);
 
-        if (flags & SCRIPT_VERIFY_LOW_S) {
-            // If we do enforce low S, then high S sigs are rejected.
-            CheckError(flags, {highSSig, message, pubkeyC}, script,
-                       ScriptError::SIG_HIGH_S);
-            CheckError(flags, {highSSig, message, pubkeyC}, scriptverify,
-                       ScriptError::SIG_HIGH_S);
-        } else {
-            // Otherwise, we enforce nullfail, these invalid sigs hit this.
-            CheckError(flags, {highSSig, message, pubkeyC}, script,
-                       ScriptError::SIG_NULLFAIL);
-            CheckError(flags, {highSSig, message, pubkeyC}, scriptverify,
-                       ScriptError::SIG_NULLFAIL);
-        }
+        // If we do enforce low S, then high S sigs are rejected.
+        CheckError(flags, {highSSig, message, pubkeyC}, script,
+                    ScriptError::SIG_HIGH_S);
+        CheckError(flags, {highSSig, message, pubkeyC}, scriptverify,
+                    ScriptError::SIG_HIGH_S);
 
-        if (flags & (SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S |
-                     SCRIPT_VERIFY_STRICTENC)) {
+        if (flags & (SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_STRICTENC)) {
             // If we get any of the dersig flags, the non canonical dersig
             // signature fails.
             CheckError(flags, {nondersig, message, pubkeyC}, script,
