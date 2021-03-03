@@ -30,6 +30,10 @@
 #include <memory>
 
 #include <minerfund.h>
+#include <protocol.h>
+#include <univalue.h>
+#include <streams.h>
+#include <primitives/block.h>
 #include <pow/pow.h>
 
 namespace miner_tests {
@@ -56,38 +60,120 @@ BlockAssembler MinerTestingSetup::AssemblerForTest(const CChainParams &params) {
     return BlockAssembler(params, *m_node.mempool, options);
 }
 
-constexpr static struct {
+static struct {
     uint8_t extranonce;
     uint32_t nonce;
 } blockinfo[] = {
-    {1,  0x7458c333}, {2, 0x4f87692f}, {3,  0xe4448bee}, {3,  0xcd574612},
-    {3,  0x5bc18aa4}, {5, 0xdbaeec2c}, {3,  0x2667b5c0}, {7,  0x8601b02b},
-    {3,  0xfb9632cc}, {6, 0x3227743e}, {3,  0x5f8eb6ac}, {4,  0x995aade0},
-    {5,  0xf83707af}, {6, 0x5eaeacc8}, {5,  0x8904dd0f}, {5,  0x1777db09},
-    {5,  0x9983d245}, {6, 0xc63ea3e8}, {5,  0x138f4f9f}, {3,  0x050350d0},
-    {3,  0x5e92f880}, {3, 0x3e92c08c}, {3,  0x8b2df62c}, {3,  0xcda57eb0},
-    {5,  0xeb7bff82}, {8, 0xb9c3129a}, {4,  0x300bf551}, {2,  0x21296be2},
-    {3,  0x7de2e084}, {5, 0x9f632535}, {3,  0x2e287bc6}, {4,  0xb59237de},
-    {10, 0x24a3f15e}, {5, 0x61af79d1}, {6,  0xda8bb49a}, {4,  0x686a46b5},
-    {6,  0x4460fd0c}, {2, 0x4e6a1940}, {4,  0xcb117cc0}, {6,  0xb5b3ab58},
-    {2,  0xabd841a6}, {5, 0x6fe14606}, {5,  0xdb206677}, {8,  0xfea51682},
-    {4,  0x34e87922}, {4, 0xac6dde44}, {4,  0x7d87e69f}, {3,  0xea2ca574},
-    {5,  0x125d0397}, {6, 0x5c3c794a}, {3,  0x42377608}, {5,  0x5bf48b3b},
-    {3,  0x27dfebe8}, {3, 0x4f982736}, {3,  0xcc11930b}, {4,  0xaafbdfa3},
-    {5,  0xf131a20a}, {5, 0xabfbedf5}, {4,  0xf0003e5c}, {4,  0xfe31362b},
-    {3,  0xe9d08362}, {3, 0x1247bf50}, {6,  0xf9324b62}, {5,  0x03fd9685},
-    {5,  0x8bf90170}, {3, 0xc95d7d70}, {5,  0x47c15edb}, {3,  0x7bca2618},
-    {4,  0x16262264}, {6, 0x2a058a73}, {2,  0x316f4d36}, {5,  0x03d00388},
-    {10, 0x75fb1f7e}, {4, 0x7516b914}, {2,  0xcda26b5d}, {5,  0xfe0d87cd},
-    {2,  0xb12d039c}, {4, 0x3d920303}, {2,  0x65e42878}, {3,  0xb7ba5a78},
-    {9,  0x07d51bd8}, {8, 0x7d248874}, {5,  0x0eee1b25}, {5,  0x0600770e},
-    {3,  0xcf5dcd70}, {4, 0x4eee7d58}, {3,  0x0205ca6c}, {4,  0x7a25eb28},
-    {3,  0x418406e0}, {8, 0x76a0a254}, {4,  0x91f60022}, {5,  0x1cf95b21},
-    {4,  0x8b5f1a54}, {3, 0xd4e81503}, {4,  0x0dca1f0e}, {8,  0xd640b02a},
-    {6,  0x489d711a}, {3, 0xc6f16d46}, {14, 0x2db7b2a8}, {10, 0x6a12c33c},
-    {3,  0xb9dc3270}, {4, 0xcf2a0162}, {3,  0xeaf1387e}, {3,  0xa3d5e1f0},
-    {2,  0xd9b22c59}, {4, 0xda118c1c}, {3,  0x7e900a4e}, {3,  0x02569532},
-    {5,  0xfcaadcde}, {3, 0xec9d9944},
+    {1, 0x628b1e49},
+    {2, 0xac068108},
+    {11, 0x719c2619},
+    {2, 0x91559120},
+    {5, 0xf5037f52},
+    {9, 0xa98a3c5a},
+    {4, 0x8816f72d},
+    {3, 0xe0e9b66e},
+    {2, 0x8611e5e9},
+    {5, 0x8a36a2ae},
+    {5, 0x7ea8d188},
+    {2, 0x6aa0e1c6},
+    {5, 0x62430b},
+    {2, 0xf03f169f},
+    {2, 0x4eba97db},
+    {4, 0xc35b347f},
+    {2, 0x52c5b0f0},
+    {5, 0x4e3c227d},
+    {2, 0x36f34401},
+    {5, 0xa52608c},
+    {6, 0x66967a24},
+    {2, 0xa5a0b36b},
+    {2, 0x9349f573},
+    {4, 0x5dddf692},
+    {8, 0x944547b4},
+    {8, 0x435da16c},
+    {2, 0x77f07522},
+    {3, 0xaf9c007a},
+    {2, 0xa434d282},
+    {2, 0x7d93d231},
+    {8, 0x9a7c414e},
+    {9, 0x6c69144d},
+    {13, 0x8eb7cb31},
+    {5, 0x7e224d22},
+    {3, 0x701fa359},
+    {2, 0xb7dbf21f},
+    {5, 0x2945ae64},
+    {10, 0xfb2dbf18},
+    {2, 0xe581e82a},
+    {2, 0xa6573b53},
+    {8, 0x3e5075f},
+    {2, 0x65c9a263},
+    {3, 0xccb0a913},
+    {3, 0x38f3b43a},
+    {7, 0x1b946e22},
+    {6, 0x68ef7276},
+    {5, 0x8606b322},
+    {3, 0x5e73626c},
+    {2, 0xd7d91958},
+    {4, 0x2339a18e},
+    {2, 0x361c1145},
+    {2, 0xbd968835},
+    {3, 0x79499e34},
+    {2, 0xf4ba55bb},
+    {2, 0xfe638677},
+    {2, 0x19840618},
+    {2, 0x1ae4974c},
+    {3, 0xe35a03c},
+    {3, 0xaa03f5d6},
+    {2, 0x7f6cd731},
+    {3, 0x6f7c1755},
+    {9, 0x6250786b},
+    {3, 0x93ddc561},
+    {8, 0xf4fff27c},
+    {7, 0xae1ee12a},
+    {6, 0xe94b411f},
+    {10, 0x5e5db777},
+    {2, 0xef97a20b},
+    {3, 0x52dda1ae},
+    {2, 0x6a51e635},
+    {4, 0xe601b236},
+    {2, 0x541cdcd0},
+    {2, 0x53e3a77b},
+    {2, 0xd6b3b644},
+    {2, 0x7636046d},
+    {4, 0xdf3fa0d0},
+    {2, 0x38c940e3},
+    {5, 0xdbfca258},
+    {3, 0xf613aaa5},
+    {8, 0xa98a7a13},
+    {5, 0x2bf7a509},
+    {2, 0x31b5c0b8},
+    {2, 0xd052cc03},
+    {2, 0x3b48dc21},
+    {4, 0x51c76898},
+    {2, 0x753def12},
+    {4, 0x17436513},
+    {2, 0xac80fb6d},
+    {2, 0xc102c921},
+    {3, 0x55ce221b},
+    {3, 0xea4d7949},
+    {2, 0xc5b5fdb3},
+    {2, 0xc9b382e4},
+    {2, 0x1dff5208},
+    {2, 0xae27e31f},
+    {5, 0x8ff6b4ca},
+    {6, 0xe488427f},
+    {4, 0xa54a73cf},
+    {2, 0xac55b7b9},
+    {3, 0x39eff568},
+    {3, 0x39cbf2b9},
+    {20, 0x9735c689},
+    {2, 0x638102bf},
+    {4, 0xe8acaf83},
+    {7, 0x658828b7},
+    {2, 0xc0017647},
+    {2, 0x617a518b},
+    {6, 0x3f87930e},
+    {3, 0x38bc5102},
+    {2, 0x31a480d5},
 };
 
 const Amount BLOCKSUBSIDY = 50 * COIN;
@@ -276,6 +362,130 @@ BOOST_AUTO_TEST_CASE(CheckCoinbase_EB) {
     TestCoinbaseMessageEB(8320000, "/EB8.3/", *m_node.mempool);
 }
 
+#include <event2/buffer.h>
+#include <event2/bufferevent.h>
+#include <event2/event.h>
+#include <event2/thread.h>
+#include <event2/http.h>
+#include <event2/util.h>
+
+static uint8_t lastExtraNonce = 0;
+static std::map<uint256, uint8_t> merkleRootToExtraNonce;
+static event_base *mine_event_base;
+static size_t blockIdx = 0;
+static size_t blockHeight = 0;
+
+void updateExtraNonce(CBlock *pblock, uint8_t extraNonce, int nHeight) {
+    CMutableTransaction txCoinbase(*pblock->vtx[0]);
+    txCoinbase.nVersion = 1;
+    txCoinbase.vin[0].scriptSig =
+        CScript() << nHeight
+                  << OP_0;
+    txCoinbase.vin[0].scriptSig.push_back(extraNonce);
+    pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
+    pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+}
+
+static void mine_request_cb(struct evhttp_request *req, void *arg) {
+    CBlock *pblock = (CBlock *)arg;
+    struct evbuffer *buf = evhttp_request_get_input_buffer(req);
+    if (!buf) {
+        return;
+    }
+    size_t size = evbuffer_get_length(buf);
+    const char *data = (const char *)evbuffer_pullup(buf, size);
+    if (!data) {
+        return;
+    }
+    std::string body(data, size);
+    evbuffer_drain(buf, size);
+    UniValue jsonBody;
+    jsonBody.read(body);
+    const UniValue &paramsArray = find_value(jsonBody, "params").get_array();
+    const std::vector<UniValue> &params = paramsArray.getValues();
+    std::string reply;
+    bool stop = false;
+    if (!params.empty()) {
+        std::vector<uint8_t> powData = ParseHex(params[0].get_str());
+        std::vector<uint8_t> headerData(powData.begin(), powData.begin() + 80);
+        for (size_t idx = 0; idx < headerData.size(); idx += 4) {
+            std::reverse(headerData.begin() + idx, headerData.begin() + idx + 4);
+        }
+        CDataStream headerStream(headerData, SER_NETWORK, PROTOCOL_VERSION);
+        CBlockHeader header;
+        headerStream >> header;
+        LogPrintf("Got hash: %s\n", header.GetHash());
+        std::map<uint256, uint8_t>::iterator nonceEntry = merkleRootToExtraNonce.find(header.hashMerkleRoot);
+        if (nonceEntry != merkleRootToExtraNonce.end()) {
+            LogPrintf("Got PoW: extranonce=%d, nonce=%d\n", nonceEntry->second, header.nNonce);
+            pblock->nNonce = header.nNonce;
+            updateExtraNonce(pblock, nonceEntry->second, blockHeight);
+            LogPrintf("Merkle roots: pblock=%s, header=%s\n", pblock->hashMerkleRoot.ToString(), header.hashMerkleRoot.ToString());
+            if (pblock->hashMerkleRoot != header.hashMerkleRoot) {
+                reply = "{\"result\":false}";
+            } else {
+                reply = "{\"result\":true}";
+                stop = true;
+                blockinfo[blockIdx] = {nonceEntry->second, header.nNonce};
+                LogPrintf("New blockinfo: \n");
+                for (size_t i = 0; i < sizeof(blockinfo) / sizeof(*blockinfo); ++i) {
+                    LogPrintf("{%d, 0x%x},\n", blockinfo[i].extranonce, blockinfo[i].nonce);
+                }
+            }
+        } else {
+            LogPrintf("Unknown merkle root: %s\n", header.hashMerkleRoot.ToString());
+            reply = "{\"result\":false}";
+        }
+    } else {
+        lastExtraNonce++;
+        updateExtraNonce(pblock, lastExtraNonce, blockHeight);
+        merkleRootToExtraNonce[pblock->hashMerkleRoot] = lastExtraNonce;
+        CDataStream headerStream(SER_NETWORK, PROTOCOL_VERSION);
+        headerStream << pblock->GetBlockHeader();
+        for (size_t idx = 0; idx < headerStream.size(); idx += 4) {
+            std::reverse(headerStream.begin() + idx, headerStream.begin() + idx + 4);
+        }
+
+        arith_uint256 bnTarget;
+        bool fNegative;
+        bool fOverflow;
+        bnTarget.SetCompact(pblock->nBits, &fNegative, &fOverflow);
+        
+        std::ostringstream replyStream;
+        replyStream << "{\"result\":{\"data\":\"";
+        replyStream << HexStr(headerStream);
+        replyStream << "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
+        replyStream << "\",\"target\":\"";
+        replyStream << HexStr(ArithToUint256(bnTarget));
+        replyStream << "\"},\"error\": null}";
+
+        reply = replyStream.str();
+    }
+    
+    struct evbuffer *evb = evhttp_request_get_output_buffer(req);
+    assert(evb);
+    evbuffer_add(evb, reply.data(), reply.size());
+    evhttp_send_reply(req, 200, nullptr, nullptr);
+    if (stop) {
+        sleep(1);
+        event_base_loopbreak(mine_event_base);
+    }
+}
+
+/** libevent event log callback */
+static void libevent_log_cb(int severity, const char *msg) {
+#ifndef EVENT_LOG_WARN
+// EVENT_LOG_WARN was added in 2.0.19; but before then _EVENT_LOG_WARN existed.
+#define EVENT_LOG_WARN _EVENT_LOG_WARN
+#endif
+    // Log warn messages and higher without debug category.
+    if (severity >= EVENT_LOG_WARN) {
+        LogPrintf("libevent: %s\n", msg);
+    } else {
+        LogPrint(BCLog::LIBEVENT, "libevent: %s\n", msg);
+    }
+}
+
 // NOTE: These tests rely on CreateNewBlock doing its own self-validation!
 BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     // Note that by default, these tests run with size accounting enabled.
@@ -306,6 +516,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
     int baseheight = 0;
     std::vector<CTransactionRef> txFirst;
     for (size_t i = 0; i < sizeof(blockinfo) / sizeof(*blockinfo); ++i) {
+        blockIdx = i;
         // pointer for convenience.
         CBlock *pblock = &pblocktemplate->block;
         {
@@ -316,9 +527,12 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
             txCoinbase.nVersion = 1;
             int nHeight = ::ChainActive().Height() + 1;
             // Make sure coinbase is BIP34 compliant
+            blockHeight = nHeight;
+            LogPrintf("Coinbase height: %d\n", nHeight);
             txCoinbase.vin[0].scriptSig = CScript() << nHeight << OP_0;
             txCoinbase.vin[0].scriptSig.push_back(blockinfo[i].extranonce);
             txCoinbase.vin[0].scriptSig.resize(100);
+            LogPrintf("Coinbase str: %s\n", HexStr(txCoinbase.vin[0].scriptSig));
             txCoinbase.vout[0].scriptPubKey = CScript();
             pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
             if (txFirst.size() == 0) {
@@ -332,8 +546,31 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity) {
             CBlockHeader header = pblock->GetBlockHeader();
             pblock->nBits = GetNextWorkRequired(::ChainActive().Tip(), &header, chainparams);
         }
+        arith_uint256 bnTarget;
+        bool fNegative;
+        bool fOverflow;
+        bnTarget.SetCompact(pblock->nBits, &fNegative, &fOverflow);
+        bool alreadyValid;
+        alreadyValid = UintToArith256(pblock->GetHash()) <= bnTarget;
+        if(!alreadyValid) {
+            event_set_log_callback(&libevent_log_cb);
+            evthread_use_pthreads();
+            mine_event_base = event_base_new();
+            evhttp *mine_http = evhttp_new(mine_event_base);
+            evhttp_set_gencb(mine_http, mine_request_cb, pblock);
+            evhttp_bind_socket(mine_http, "127.0.0.1", 3000);
+            LogPrintf("Waiting for getwork requests...\n");
+            event_base_dispatch(mine_event_base);
+            merkleRootToExtraNonce.clear();
+            lastExtraNonce = 0;
+            evhttp_free(mine_http);
+            event_base_free(mine_event_base);
+        }
         std::shared_ptr<const CBlock> shared_pblock =
             std::make_shared<const CBlock>(*pblock);
+        CDataStream headerStream(SER_NETWORK, PROTOCOL_VERSION);
+        headerStream << shared_pblock->GetBlockHeader();
+        LogPrintf("Made header: %s\n", HexStr(headerStream));
         BOOST_CHECK(
             Assert(m_node.chainman)
                 ->ProcessNewBlock(config, shared_pblock, true, nullptr));

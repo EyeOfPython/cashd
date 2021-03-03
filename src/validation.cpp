@@ -3843,6 +3843,10 @@ static bool ContextualCheckBlock(const CBlock &block,
         if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||
             !std::equal(expect.begin(), expect.end(),
                         block.vtx[0]->vin[0].scriptSig.begin())) {
+            CScript actual(block.vtx[0]->vin[0].scriptSig.begin(),
+                           block.vtx[0]->vin[0].scriptSig.begin() + 6);
+            LogPrintf("Height mismatch: %s != %s\n", HexStr(expect), HexStr(actual));
+            LogPrintf("Prev hash: %s\n", block.hashPrevBlock.ToString());
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS,
                                     "bad-cb-height",
                                     "block height mismatch in coinbase");
