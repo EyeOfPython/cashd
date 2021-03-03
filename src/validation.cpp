@@ -3844,8 +3844,8 @@ static bool ContextualCheckBlock(const CBlock &block,
             !std::equal(expect.begin(), expect.end(),
                         block.vtx[0]->vin[0].scriptSig.begin())) {
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS,
-                                 "bad-cb-height",
-                                 "block height mismatch in coinbase");
+                                    "bad-cb-height",
+                                    "block height mismatch in coinbase");
         }
     }
 

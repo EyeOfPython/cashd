@@ -20,6 +20,9 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <logging.h>
+#include <core_io.h>
+
 BOOST_AUTO_TEST_SUITE(txvalidationcache_tests)
 
 BOOST_FIXTURE_TEST_CASE(tx_mempool_block_doublespend, TestChain100Setup) {
@@ -148,6 +151,16 @@ ValidateCheckInputsForAllFlags(const CTransaction &tx, uint32_t failing_flags,
         // CheckInputScripts should succeed iff test_flags doesn't intersect
         // with failing_flags
         bool expected_return_value = !(test_flags & failing_flags);
+        if (ret != expected_return_value) {
+            for (size_t i = 0; i < tx.vin.size(); ++i) {
+                const Coin &coin = ::ChainstateActive().CoinsTip().AccessCoin(tx.vin[i].prevout);
+                LogPrintf("Input Idx: %d\n", i);
+                LogPrintf("scriptPubKey: %s\n", ScriptToAsmStr(coin.GetTxOut().scriptPubKey));
+                LogPrintf("scriptSig: %s\n", ScriptToAsmStr(tx.vin[i].scriptSig));
+            }
+            LogPrintf("Locktime: %d, %x\n", tx.nLockTime, tx.nLockTime);
+            LogPrintf("Expected return value %d but got %d\n", expected_return_value, ret);
+        }
         BOOST_CHECK_EQUAL(ret, expected_return_value);
 
         if (ret) {
