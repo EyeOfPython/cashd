@@ -378,10 +378,9 @@ static size_t blockHeight = 0;
 void updateExtraNonce(CBlock *pblock, uint8_t extraNonce, int nHeight) {
     CMutableTransaction txCoinbase(*pblock->vtx[0]);
     txCoinbase.nVersion = 1;
-    txCoinbase.vin[0].scriptSig =
-        CScript() << nHeight
-                  << OP_0;
+    txCoinbase.vin[0].scriptSig = CScript() << nHeight << OP_0;
     txCoinbase.vin[0].scriptSig.push_back(extraNonce);
+    txCoinbase.vin[0].scriptSig.resize(100);
     pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 }
