@@ -378,7 +378,14 @@ bool CScript::IsPayToScriptHash() const {
 
 bool CScript::IsPayToTaproot() const {
     // Extra-fast test for pay-to-taproot CScripts:
-    return (*this)[this->size() - 1] == OP_TAPROOT;
+    switch (this->size()) {
+        case 1 + 1 + 33 + 1:
+            return (*this)[0] == OP_0 && (*this)[1] == 0x21 &&
+                   (*this)[34] == OP_TAPROOT;
+        case 1 + 32 + 1 + 33 + 1:
+            return (*this)[0] == 0x20 && (*this)[33] == 0x21 &&
+                   (*this)[66] == OP_TAPROOT;
+    }
 }
 
 bool CScript::IsCommitment(const std::vector<uint8_t> &data) const {
