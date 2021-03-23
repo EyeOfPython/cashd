@@ -12,13 +12,24 @@
 #include <script/standard.h>
 #include <uint256.h>
 
+#include <logging.h>
+
 typedef std::vector<uint8_t> valtype;
 
 MutableTransactionSignatureCreator::MutableTransactionSignatureCreator(
     const CMutableTransaction *txToIn, unsigned int nInIn,
-    const Amount &amountIn, SigHashType sigHashTypeIn)
+    const Amount &amountIn, SigHashType sigHashTypeIn,
+    std::vector<CTxOut> &&spent_outputs)
     : txTo(txToIn), nIn(nInIn), amount(amountIn), sigHashType(sigHashTypeIn),
-      checker(txTo, nIn, amountIn) {}
+      checker(txTo, nIn, amountIn,
+              PrecomputedTransactionData(*txTo, std::move(spent_outputs))) {}
+
+MutableTransactionSignatureCreator::MutableTransactionSignatureCreator(
+    const CMutableTransaction *txToIn, unsigned int nInIn,
+    const Amount &amountIn, SigHashType sigHashTypeIn,
+    const PrecomputedTransactionData &txdata)
+    : txTo(txToIn), nIn(nInIn), amount(amountIn), sigHashType(sigHashTypeIn),
+      checker(txTo, nIn, amountIn, txdata) {}
 
 bool MutableTransactionSignatureCreator::CreateSig(
     const SigningProvider &provider, std::vector<uint8_t> &vchSig,
@@ -225,9 +236,13 @@ bool ProduceSignature(const SigningProvider &provider,
     sigdata.scriptSig = PushAll(result);
 
     // Test solution
+    ScriptError error = ScriptError::OK;
     sigdata.complete =
         solved && VerifyScript(sigdata.scriptSig, fromPubKey,
-                               STANDARD_SCRIPT_VERIFY_FLAGS, creator.Checker());
+                               STANDARD_SCRIPT_VERIFY_FLAGS, creator.Checker(), &error);
+    if (!sigdata.complete) {
+        LogPrintf("Script error: %s", ScriptErrorString(error));
+    }
     return sigdata.complete;
 }
 
@@ -351,7 +366,8 @@ bool SignSignature(const SigningProvider &provider, const CScript &fromPubKey,
                    const Amount amount, SigHashType sigHashType) {
     assert(nIn < txTo.vin.size());
 
-    MutableTransactionSignatureCreator creator(&txTo, nIn, amount, sigHashType);
+    MutableTransactionSignatureCreator creator(&txTo, nIn, amount, sigHashType,
+                                               {{amount, fromPubKey}});
 
     SignatureData sigdata;
     bool ret = ProduceSignature(provider, creator, fromPubKey, sigdata);
@@ -444,26 +460,35 @@ bool SignTransaction(CMutableTransaction &mtx, const SigningProvider *keystore,
     // Use CTransaction for the constant parts of the
     // transaction to avoid rehashing.
     const CTransaction txConst(mtx);
-    // Sign what we can:
+    std::vector<CTxOut> spent_outputs;
+    spent_outputs.reserve(mtx.vin.size());
     for (size_t i = 0; i < mtx.vin.size(); i++) {
-        CTxIn &txin = mtx.vin[i];
-        auto coin = coins.find(txin.prevout);
+        auto coin = coins.find(mtx.vin[i].prevout);
         if (coin == coins.end() || coin->second.IsSpent()) {
             input_errors[i] = "Input not found or already spent";
             continue;
         }
-        const CScript &prevPubKey = coin->second.GetTxOut().scriptPubKey;
-        const Amount amount = coin->second.GetTxOut().nValue;
+        spent_outputs.push_back(coin->second.GetTxOut());
+    }
+    const PrecomputedTransactionData txdata(mtx, std::vector(spent_outputs));
+
+    // Sign what we can:
+    for (size_t i = 0; i < mtx.vin.size(); i++) {
+        CTxIn &txin = mtx.vin[i];
+        CTxOut &coinTxOut = spent_outputs[i];
+        const CScript &prevPubKey = coinTxOut.scriptPubKey;
+        const Amount amount = coinTxOut.nValue;
 
         SignatureData sigdata =
-            DataFromTransaction(mtx, i, coin->second.GetTxOut());
+            DataFromTransaction(mtx, i, coinTxOut);
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if ((sigHashType.getBaseType() != BaseSigHashType::SINGLE) ||
             (i < mtx.vout.size())) {
-            ProduceSignature(*keystore,
-                             MutableTransactionSignatureCreator(&mtx, i, amount,
-                                                                sigHashType),
-                             prevPubKey, sigdata);
+            ProduceSignature(
+                *keystore,
+                MutableTransactionSignatureCreator(&mtx, i, amount, sigHashType,
+                                                   std::vector(spent_outputs)),
+                prevPubKey, sigdata);
         }
 
         UpdateInput(txin, sigdata);
@@ -477,7 +502,8 @@ bool SignTransaction(CMutableTransaction &mtx, const SigningProvider *keystore,
         ScriptError serror = ScriptError::OK;
         if (!VerifyScript(
                 txin.scriptSig, prevPubKey, STANDARD_SCRIPT_VERIFY_FLAGS,
-                TransactionSignatureChecker(&txConst, i, amount), &serror)) {
+                TransactionSignatureChecker(&txConst, i, amount),
+                &serror)) {
             if (serror == ScriptError::INVALID_STACK_OPERATION) {
                 // Unable to sign input and verification failed (possible
                 // attempt to partially sign).

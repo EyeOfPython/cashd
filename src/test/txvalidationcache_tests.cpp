@@ -430,32 +430,33 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         tx.vout.resize(1);
         tx.vout[0].nValue = 22 * CENT;
         tx.vout[0].scriptPubKey = p2pk_scriptPubKey;
+        std::vector spent_outputs{spend_tx.vout[0], spend_tx.vout[3]};
 
         // Sign
         {
             SignatureData sigdata;
+            MutableTransactionSignatureCreator creator(
+                &tx, 0, 11 * CENT, SigHashType().withForkId(),
+                std::vector(spent_outputs));
             BOOST_CHECK(ProduceSignature(
-                keystore,
-                MutableTransactionSignatureCreator(&tx, 0, 11 * CENT,
-                                                   SigHashType().withForkId()),
-                spend_tx.vout[0].scriptPubKey, sigdata));
+                keystore, creator, spend_tx.vout[0].scriptPubKey, sigdata));
             UpdateInput(tx.vin[0], sigdata);
         }
         {
             SignatureData sigdata;
+            MutableTransactionSignatureCreator creator(
+                &tx, 1, 11 * CENT, SigHashType().withForkId(),
+                std::vector(spent_outputs));
             BOOST_CHECK(ProduceSignature(
-                keystore,
-                MutableTransactionSignatureCreator(&tx, 1, 11 * CENT,
-                                                   SigHashType().withForkId()),
-                spend_tx.vout[3].scriptPubKey, sigdata));
+                keystore, creator, spend_tx.vout[3].scriptPubKey, sigdata));
             UpdateInput(tx.vin[1], sigdata);
         }
 
         // This should be valid under all script flags that support our sighash
         // convention.
-        ValidateCheckInputsForAllFlags(
-            CTransaction(tx), SCRIPT_ENABLE_REPLAY_PROTECTION,
-            SCRIPT_ENABLE_SIGHASH_FORKID, true, 2);
+        ValidateCheckInputsForAllFlags(CTransaction(tx),
+                                       SCRIPT_ENABLE_REPLAY_PROTECTION,
+                                       SCRIPT_ENABLE_SIGHASH_FORKID, true, 2);
 
         {
             // Try checking this valid transaction with sigchecks limiter
@@ -582,10 +583,10 @@ BOOST_FIXTURE_TEST_CASE(checkinputs_test, TestChain100Setup) {
         // Make sure this transaction was not cached (ie becausethe first input
         // was valid)
         std::vector<CScriptCheck> scriptchecks;
-        BOOST_CHECK(CheckInputScripts(
-            transaction, state, &::ChainstateActive().CoinsTip(),
-            STANDARD_SCRIPT_VERIFY_FLAGS, true, true,
-            txdata, nSigChecksDummy, &scriptchecks));
+        BOOST_CHECK(CheckInputScripts(transaction, state,
+                                      &::ChainstateActive().CoinsTip(),
+                                      STANDARD_SCRIPT_VERIFY_FLAGS, true, true,
+                                      txdata, nSigChecksDummy, &scriptchecks));
         // Should get 2 script checks back -- caching is on a whole-transaction
         // basis.
         BOOST_CHECK_EQUAL(scriptchecks.size(), 2U);

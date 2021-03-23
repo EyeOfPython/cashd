@@ -683,6 +683,13 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
 
     const FillableSigningProvider &keystore = tempKeystore;
 
+    std::vector<CTxOut> spent_outputs;
+    spent_outputs.reserve(mergedTx.vin.size());
+    for (size_t i = 0; i < mergedTx.vin.size(); i++) {
+        CTxIn &txin = mergedTx.vin[i];
+        spent_outputs.push_back(view.AccessCoin(txin.prevout).GetTxOut());
+    }
+
     // Sign what we can:
     for (size_t i = 0; i < mergedTx.vin.size(); i++) {
         CTxIn &txin = mergedTx.vin[i];
@@ -701,7 +708,8 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
             (i < mergedTx.vout.size())) {
             ProduceSignature(keystore,
                              MutableTransactionSignatureCreator(
-                                 &mergedTx, i, amount, sigHashType),
+                                 &mergedTx, i, amount, sigHashType,
+                                 std::vector(spent_outputs)),
                              prevPubKey, sigdata);
         }
 

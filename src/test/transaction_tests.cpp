@@ -478,10 +478,10 @@ SignatureData CombineSignatures(const CMutableTransaction &input1,
     SignatureData sigdata;
     sigdata = DataFromTransaction(input1, 0, tx->vout[0]);
     sigdata.MergeSignatureData(DataFromTransaction(input2, 0, tx->vout[0]));
-    ProduceSignature(
-        DUMMY_SIGNING_PROVIDER,
-        MutableTransactionSignatureCreator(&input1, 0, tx->vout[0].nValue),
-        tx->vout[0].scriptPubKey, sigdata);
+    ProduceSignature(DUMMY_SIGNING_PROVIDER,
+                     MutableTransactionSignatureCreator(
+                         &input1, 0, tx->vout[0].nValue),
+                     tx->vout[0].scriptPubKey, sigdata);
     return sigdata;
 }
 
